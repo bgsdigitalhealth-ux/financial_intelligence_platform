@@ -51,15 +51,18 @@ export function GovDashboardView({ onSelectTab, onTriggerToast }) {
   // DYNAMIC COMPUTATIONS PER UNIVERSITY (No Hardcoding, No Mock Data)
   // =========================================================================
   const universityAnalytics = useMemo(() => {
+    if (!universities || universities.length === 0) return []
     return universities.map((u) => {
-      const uAccounts = (bankAccounts || []).filter((a) => a.universityId === u.id)
+      const uAccounts = (bankAccounts || []).filter(
+        (a) => a.universityId === u.id || (u.code && a.universityId === u.code)
+      )
       const uAccountIds = uAccounts.map((a) => a.id)
       const uStmts = (statements || []).filter(
-        (s) => s.universityId === u.id || uAccountIds.includes(s.accountId)
+        (s) => s.universityId === u.id || (u.code && s.universityId === u.code) || uAccountIds.includes(s.accountId)
       )
 
-      const activeAccountsCount = Math.max(1, uAccounts.length)
-      const requiredCount = Math.max(1, activeAccountsCount)
+      const activeAccountsCount = uAccounts.length
+      const requiredCount = activeAccountsCount
       const receivedCount = uStmts.length
       const approvedCount = uStmts.filter(
         (s) => s.status === 'Approved by Gov Leader' || s.status === 'Approved' || s.status === 'AI Validated'
@@ -70,20 +73,26 @@ export function GovDashboardView({ onSelectTab, onTriggerToast }) {
       const missingCount = Math.max(0, requiredCount - receivedCount)
       const completionPct = requiredCount > 0 ? Math.min(100, Math.round((approvedCount / requiredCount) * 100)) : 0
 
-      let status = 'Pending'
-      if (approvedCount >= requiredCount && requiredCount > 0) {
-        status = 'Fully Submitted'
-      } else if (underReviewCount > 0 || receivedCount > 0) {
+      let status = 'Optimal'
+      if (requiredCount > 0) {
+        if (approvedCount >= requiredCount) {
+          status = 'Fully Submitted'
+        } else if (underReviewCount > 0 || receivedCount > 0) {
+          status = 'Under Review'
+        } else {
+          status = 'Pending'
+        }
+      } else if (receivedCount > 0) {
         status = 'Under Review'
       }
 
       const credits = uStmts.reduce((sum, s) => sum + (Number(s.totalCredits) || 0), 0)
       const debits = uStmts.reduce((sum, s) => sum + (Number(s.totalDebits) || 0), 0)
-      const rawAlloc = Number(u.allocation) || Number(u.allocatedAmount) || 0
+      const rawAlloc = Number(u.allocation ?? u.allocatedAmount) || 0
       const alloc = credits > 0 ? credits : rawAlloc
-      const spent = debits > 0 ? debits : (Number(u.spent) || Number(u.spentAmount) || 0)
+      const spent = debits > 0 ? debits : (Number(u.spent ?? u.spentAmount) || 0)
       const balance = Math.max(0, alloc - spent)
-      const complianceScore = Number(u.complianceScore) || (status === 'Fully Submitted' ? 100 : status === 'Under Review' ? 85 : 70)
+      const complianceScore = Number(u.complianceScore) || (status === 'Fully Submitted' ? 100 : status === 'Under Review' ? 85 : 95)
 
       return {
         ...u,
@@ -109,25 +118,53 @@ export function GovDashboardView({ onSelectTab, onTriggerToast }) {
   }, [universities, bankAccounts, statements])
 
   // =========================================================================
-  // STATEWIDE SUMMARY METRICS (Top 6 KPI Cards)
+  // STATEWIDE SUMMARY METRICS (Top 6 KPI Cards) - 100% Dynamic
   // =========================================================================
   const totalUniversities = universities.length
-  const totalRegisteredAccounts = bankAccounts.length
+  const totalRegisteredAccounts = useMemo(() => {
+    if (!universities || universities.length === 0) return 0
+    return (bankAccounts || []).filter((a) =>
+      universities.some((u) => u.id === a.universityId || (u.code && a.universityId === u.code))
+    ).length
+  }, [universities, bankAccounts])
 
   const totalBankBalances = useMemo(() => {
-    const fromAccounts = bankAccounts.reduce((sum, a) => sum + (Number(a.currentBalance) || 0), 0)
+    if (!universities || universities.length === 0) return 0
+    const fromAccounts = (bankAccounts || []).reduce((sum, a) => {
+      if (universities.some((u) => u.id === a.universityId || (u.code && a.universityId === u.code))) {
+        return sum + (Number(a.currentBalance) || 0)
+      }
+      return sum
+    }, 0)
     if (fromAccounts > 0) return fromAccounts
-    return statements.reduce((sum, s) => sum + (Number(s.closingBalance) || 0), 0)
-  }, [bankAccounts, statements])
+    return (statements || []).reduce((sum, s) => {
+      if (universities.some((u) => u.id === s.universityId || (u.code && s.universityId === u.code))) {
+        return sum + (Number(s.closingBalance) || 0)
+      }
+      return sum
+    }, 0)
+  }, [universities, bankAccounts, statements])
 
   const totalCredits = useMemo(() => {
-    return statements.reduce((sum, s) => sum + (Number(s.totalCredits) || 0), 0)
-  }, [statements])
+    if (!universities || universities.length === 0) return 0
+    return statements.reduce((sum, s) => {
+      if (universities.some((u) => u.id === s.universityId || (u.code && s.universityId === u.code))) {
+        return sum + (Number(s.totalCredits) || 0)
+      }
+      return sum
+    }, 0)
+  }, [statements, universities])
 
   const totalDebits = useMemo(() => {
-    const fromStmts = statements.reduce((sum, s) => sum + (Number(s.totalDebits) || 0), 0)
+    if (!universities || universities.length === 0) return 0
+    const fromStmts = statements.reduce((sum, s) => {
+      if (universities.some((u) => u.id === s.universityId || (u.code && s.universityId === u.code))) {
+        return sum + (Number(s.totalDebits) || 0)
+      }
+      return sum
+    }, 0)
     if (fromStmts > 0) return fromStmts
-    return universities.reduce((sum, u) => sum + (Number(u.spent) || 0), 0)
+    return universities.reduce((sum, u) => sum + (Number(u.spent ?? u.spentAmount) || 0), 0)
   }, [statements, universities])
 
   const fullySubmittedCount = useMemo(() => {
@@ -139,24 +176,29 @@ export function GovDashboardView({ onSelectTab, onTriggerToast }) {
   }, [universityAnalytics])
 
   const pendingSubmissionsCount = useMemo(() => {
-    return universityAnalytics.filter((u) => u.status === 'Pending').length
-  }, [universityAnalytics])
+    if (!universities || universities.length === 0) return 0
+    return universityAnalytics.filter((u) => u.required > 0 && u.status === 'Pending').length
+  }, [universityAnalytics, universities])
 
   const missingStatementsCount = useMemo(() => {
+    if (!universities || universities.length === 0) return 0
     return universityAnalytics.reduce((sum, u) => sum + u.missing, 0)
-  }, [universityAnalytics])
+  }, [universityAnalytics, universities])
 
   const criticalAlertsCount = useMemo(() => {
-    return universityAnalytics.filter((u) => u.complianceScore < 85 || u.status === 'Pending').length
-  }, [universityAnalytics])
+    if (!universities || universities.length === 0) return 0
+    return universityAnalytics.filter((u) => (u.required > 0 && u.status === 'Pending') || (u.complianceScore > 0 && u.complianceScore < 85)).length
+  }, [universityAnalytics, universities])
 
   const totalExceptionsCount = useMemo(() => {
+    if (!universities || universities.length === 0) return 0
     const txExceptions = statements.reduce((acc, s) => {
+      if (!universities.some((u) => u.id === s.universityId || (u.code && s.universityId === u.code))) return acc
       const txs = s.transactions || s.rawTransactions || []
       return acc + txs.filter((t) => t.status === 'Exception' || t.flag).length
     }, 0)
-    return txExceptions > 0 ? txExceptions : criticalAlertsCount
-  }, [statements, criticalAlertsCount])
+    return txExceptions
+  }, [statements, universities])
 
   // =========================================================================
   // ROW 1 - GRAPH 1: Quarterly Financial Trend (External Receipts, Payments, Balance)

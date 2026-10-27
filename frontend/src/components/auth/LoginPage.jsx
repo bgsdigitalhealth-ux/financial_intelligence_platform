@@ -96,7 +96,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
       },
     ]
 
-    // Populate from active colleges list
+    // Populate exclusively from active registered colleges list
     if (colleges && colleges.length > 0) {
       colleges.forEach((c) => {
         if (c.financeEmail) {
@@ -108,27 +108,6 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
           })
         }
       })
-    } else {
-      list.push(
-        {
-          name: 'Bangalore University',
-          email: 'fo@bangaloreuniversity.ac.in',
-          role: 'College Finance Officer',
-          badge: 'BU-BLR',
-        },
-        {
-          name: 'VTU Belagavi',
-          email: 'finance@vtu.ac.in',
-          role: 'College Finance Officer',
-          badge: 'VTU-BEL',
-        },
-        {
-          name: 'University of Mysore',
-          email: 'finance@uni-mysore.ac.in',
-          role: 'College Finance Officer',
-          badge: 'UOM-MYS',
-        }
-      )
     }
 
     return list

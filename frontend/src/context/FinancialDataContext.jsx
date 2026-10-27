@@ -65,129 +65,46 @@ function generateCommitHash() {
   return result
 }
 
-// Baseline State Institutions for instant display & resilient mode
-const BASELINE_UNIVERSITIES = [
-  {
-    id: 'univ-bangalore',
-    code: 'BU-BLR',
-    name: 'Bangalore University',
-    institutionType: 'State Public University',
-    officialEmail: 'registrar@bangaloreuniversity.ac.in',
-    financeEmail: 'fo@bangaloreuniversity.ac.in',
-    state: 'Karnataka',
-    district: 'Bengaluru Urban',
-    address: 'Jnana Bharathi Campus, Bengaluru - 560056',
-    affiliatedUniversity: 'Self',
-    region: 'Bengaluru Central',
-    category: 'State Public University',
-    allocation: 8500000000,
-    spent: 6120000000,
-    availableCash: 2380000000,
-    utilization: 72.0,
-    complianceScore: 98,
-    complianceGrade: 'A+',
-    status: 'Optimal',
-    patents: 24,
-    studentEnrollment: 65000,
-    bankAccountCount: 3,
-    statementStatus: 'AI Validated',
-    lastAudit: '2026-09-30',
-  },
-  {
-    id: 'univ-vtu',
-    code: 'VTU-BEL',
-    name: 'Visvesvaraya Technological University (VTU)',
-    institutionType: 'State Public University',
-    officialEmail: 'registrar@vtu.ac.in',
-    financeEmail: 'finance@vtu.ac.in',
-    state: 'Karnataka',
-    district: 'Belagavi',
-    address: 'Jnana Sangama, Machhe, Belagavi - 590018',
-    affiliatedUniversity: 'Self',
-    region: 'Belagavi Region',
-    category: 'State Technological University',
-    allocation: 12000000000,
-    spent: 8400000000,
-    availableCash: 3600000000,
-    utilization: 70.0,
-    complianceScore: 96,
-    complianceGrade: 'A+',
-    status: 'Optimal',
-    patents: 68,
-    studentEnrollment: 120000,
-    bankAccountCount: 4,
-    statementStatus: 'AI Validated',
-    lastAudit: '2026-09-15',
-  },
-  {
-    id: 'univ-mysore',
-    code: 'UOM-MYS',
-    name: 'University of Mysore',
-    institutionType: 'State Public University',
-    officialEmail: 'registrar@uni-mysore.ac.in',
-    financeEmail: 'finance@uni-mysore.ac.in',
-    state: 'Karnataka',
-    district: 'Mysuru',
-    address: 'Crawford Hall, Mysuru - 570005',
-    affiliatedUniversity: 'Self',
-    region: 'Mysuru Division',
-    category: 'State Public University',
-    allocation: 6500000000,
-    spent: 4200000000,
-    availableCash: 2300000000,
-    utilization: 64.6,
-    complianceScore: 94,
-    complianceGrade: 'A',
-    status: 'Optimal',
-    patents: 31,
-    studentEnrollment: 45000,
-    bankAccountCount: 2,
-    statementStatus: 'AI Validated',
-    lastAudit: '2026-08-30',
-  },
-]
+// Baseline collections start empty so all data is 100% dynamic
+const BASELINE_UNIVERSITIES = []
+const BASELINE_ACCOUNTS = []
 
-const BASELINE_ACCOUNTS = [
-  {
-    id: 'acc-bu-01',
-    universityId: 'univ-bangalore',
-    accountNumber: '100203849102',
-    accountName: 'General Fund & State Grant Escrow',
-    accountHolderName: 'Bangalore University Treasury',
-    bankName: 'Canara Bank',
-    accountType: 'State Treasury Escrow',
-    branch: 'Jnana Bharathi Campus Branch',
-    ifscCode: 'CNRB0001002',
-    currentBalance: 2380000000,
-    currency: 'INR',
-    status: 'Active',
-    description: 'Primary state higher education recurring allocation escrow',
-  },
-  {
-    id: 'acc-vtu-01',
-    universityId: 'univ-vtu',
-    accountNumber: '382910485910',
-    accountName: 'VTU Central Research & Tech Development',
-    accountHolderName: 'VTU Belagavi Finance Division',
-    bankName: 'State Bank of India',
-    accountType: 'State Treasury Escrow',
-    branch: 'Jnana Sangama Belagavi Branch',
-    ifscCode: 'SBIN0040714',
-    currentBalance: 3600000000,
-    currency: 'INR',
-    status: 'Active',
-    description: 'Central engineering grant & research disbursement account',
-  },
-]
-
-function getStored(key, fallback) {
+function getStored(key, fallback = []) {
   try {
     const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null
-    if (!raw) return fallback
+    if (raw === null || raw === undefined) return fallback
     const parsed = JSON.parse(raw)
-    return Array.isArray(fallback)
-      ? (Array.isArray(parsed) && parsed.length > 0 ? parsed : fallback)
-      : (parsed || fallback)
+    if (!Array.isArray(parsed)) return parsed !== null ? parsed : fallback
+
+    // Clean out legacy dummy records permanently from browser localStorage
+    const cleaned = parsed.filter((item) => {
+      const id = String(item?.id || '').toLowerCase()
+      const uId = String(item?.universityId || '').toLowerCase()
+      const code = String(item?.code || '').toUpperCase()
+      return (
+        id !== 'univ-bangalore' &&
+        id !== 'univ-vtu' &&
+        id !== 'univ-mysore' &&
+        id !== 'acc-bu-01' &&
+        id !== 'acc-vtu-01' &&
+        uId !== 'univ-bangalore' &&
+        uId !== 'univ-vtu' &&
+        uId !== 'univ-mysore' &&
+        code !== 'BU-BLR' &&
+        code !== 'VTU-BEL' &&
+        code !== 'UOM-MYS'
+      )
+    })
+
+    if (typeof window !== 'undefined' && cleaned.length !== parsed.length) {
+      try {
+        localStorage.setItem(key, JSON.stringify(cleaned))
+      } catch (e) {
+        console.warn(e)
+      }
+    }
+
+    return cleaned
   } catch {
     return fallback
   }
@@ -198,7 +115,7 @@ const FinancialDataContext = createContext(null)
 
 export function FinancialDataProvider({ children }) {
   // Pure dynamic state loaded from MySQL with local fallback
-  const [universities, setUniversities] = useState(() => getStored('gfi_universities', BASELINE_UNIVERSITIES))
+  const [universities, setUniversities] = useState(() => getStored('gfi_universities', []))
   const [fundingStreams, setFundingStreams] = useState(() => getStored('gfi_funding_streams', []))
   const [disbursementPipeline, setDisbursementPipeline] = useState(() => getStored('gfi_disbursements', []))
   const [departments, setDepartments] = useState(() => getStored('gfi_departments', []))
@@ -210,26 +127,38 @@ export function FinancialDataProvider({ children }) {
   const [policies, setPolicies] = useState(() => getStored('gfi_policies', []))
 
   // Dynamic Backend State & Workflow Selections
-  const [bankAccounts, setBankAccounts] = useState(() => getStored('gfi_bank_accounts', BASELINE_ACCOUNTS))
+  const [bankAccounts, setBankAccounts] = useState(() => getStored('gfi_bank_accounts', []))
   const [statements, setStatements] = useState(() => getStored('gfi_statements', []))
   const [reports, setReports] = useState(null)
-  const [selectedUniversityId, setSelectedUniversityId] = useState(() => getStored('gfi_universities', BASELINE_UNIVERSITIES)[0]?.id || '')
-  const [selectedAccountId, setSelectedAccountId] = useState(() => getStored('gfi_bank_accounts', BASELINE_ACCOUNTS)[0]?.id || '')
+  const [selectedUniversityId, setSelectedUniversityId] = useState(() => getStored('gfi_universities', [])[0]?.id || '')
+  const [selectedAccountId, setSelectedAccountId] = useState(() => getStored('gfi_bank_accounts', [])[0]?.id || '')
   const [activeStatement, setActiveStatement] = useState(null)
   const [isBackendConnected, setIsBackendConnected] = useState(true)
   const [isLoadingBackend, setIsLoadingBackend] = useState(false)
 
-  // Safe sync to localStorage (preserves data across reloads)
+  // Safe sync to localStorage (preserves dynamic state, including empty arrays after deletion)
   useEffect(() => {
-    if (universities.length > 0) localStorage.setItem('gfi_universities', JSON.stringify(universities))
+    try {
+      localStorage.setItem('gfi_universities', JSON.stringify(universities))
+    } catch (e) {
+      console.warn(e)
+    }
   }, [universities])
 
   useEffect(() => {
-    if (bankAccounts.length > 0) localStorage.setItem('gfi_bank_accounts', JSON.stringify(bankAccounts))
+    try {
+      localStorage.setItem('gfi_bank_accounts', JSON.stringify(bankAccounts))
+    } catch (e) {
+      console.warn(e)
+    }
   }, [bankAccounts])
 
   useEffect(() => {
-    if (statements.length > 0) localStorage.setItem('gfi_statements', JSON.stringify(statements))
+    try {
+      localStorage.setItem('gfi_statements', JSON.stringify(statements))
+    } catch (e) {
+      console.warn(e)
+    }
   }, [statements])
 
   useEffect(() => {
@@ -278,21 +207,32 @@ export function FinancialDataProvider({ children }) {
         api.getPolicies(),
       ])
 
-      if (univRes.status === 'fulfilled' && univRes.value?.universities) {
-        setUniversities(univRes.value.universities)
+      if (univRes.status === 'fulfilled' && Array.isArray(univRes.value?.universities)) {
+        const liveUnivs = univRes.value.universities.filter(
+          (u) =>
+            u.id !== 'univ-bangalore' &&
+            u.id !== 'univ-vtu' &&
+            u.id !== 'univ-mysore' &&
+            u.code !== 'BU-BLR' &&
+            u.code !== 'VTU-BEL' &&
+            u.code !== 'UOM-MYS'
+        )
+        setUniversities(liveUnivs)
         setSelectedUniversityId((prev) => {
-          if (univRes.value.universities.length === 0) return ''
-          if (prev && univRes.value.universities.some((u) => u.id === prev)) return prev
-          return univRes.value.universities[0].id
+          if (liveUnivs.length === 0) return ''
+          if (prev && liveUnivs.some((u) => u.id === prev)) return prev
+          return liveUnivs[0]?.id || ''
         })
       }
-      if (acctsRes.status === 'fulfilled' && acctsRes.value?.accounts) {
-        const liveAccts = acctsRes.value.accounts
+      if (acctsRes.status === 'fulfilled' && Array.isArray(acctsRes.value?.accounts)) {
+        const liveAccts = acctsRes.value.accounts.filter(
+          (a) => a.id !== 'acc-bu-01' && a.id !== 'acc-vtu-01'
+        )
         setBankAccounts(liveAccts)
         setSelectedAccountId((prev) => {
           if (liveAccts.length === 0) return ''
           if (prev && liveAccts.some((a) => a.id === prev)) return prev
-          return liveAccts[0].id
+          return liveAccts[0]?.id || ''
         })
       }
       if (stmtsRes.status === 'fulfilled' && stmtsRes.value?.statements) {
@@ -797,20 +737,45 @@ export function FinancialDataProvider({ children }) {
   }
 
   const deleteUniversity = async (id) => {
+    const target = universities.find((u) => u.id === id || u.code === id)
+    const targetId = target?.id || id
+    const targetCode = target?.code
+
+    const remainingUnivs = universities.filter((u) => u.id !== targetId && (!targetCode || u.code !== targetCode))
+    const remainingAccts = bankAccounts.filter((a) => a.universityId !== targetId && (!targetCode || a.universityId !== targetCode))
+    const remainingStmts = statements.filter((s) => s.universityId !== targetId && (!targetCode || s.universityId !== targetCode))
+
+    // 1. Update React state immediately
+    setUniversities(remainingUnivs)
+    setBankAccounts(remainingAccts)
+    setStatements(remainingStmts)
+
+    if (selectedUniversityId === targetId || selectedUniversityId === targetCode) {
+      setSelectedUniversityId(remainingUnivs[0]?.id || '')
+    }
+
+    // 2. Persist to localStorage immediately so a page reload never restores the deleted university
     try {
-      await api.deleteUniversity(id)
+      localStorage.setItem('gfi_universities', JSON.stringify(remainingUnivs))
+      localStorage.setItem('gfi_bank_accounts', JSON.stringify(remainingAccts))
+      localStorage.setItem('gfi_statements', JSON.stringify(remainingStmts))
+    } catch (e) {
+      console.error('LocalStorage sync error on delete:', e)
+    }
+
+    // 3. Delete from backend MySQL database
+    try {
+      await api.deleteUniversity(targetId)
     } catch (err) {
       console.warn('API deleteUniversity error:', err)
     }
-    const target = universities.find((u) => u.id === id)
-    setUniversities((prev) => prev.filter((u) => u.id !== id))
+
     recordAuditLog(
       'UNIVERSITY_DELETED',
       `Removed university record: ${target?.name || id}`,
       'Gov Leader',
       'Warning'
     )
-    await refreshBackendData()
   }
 
   const authorizeDisbursement = (trancheId, note = '') => {

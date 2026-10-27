@@ -51,7 +51,15 @@ class MySQLDatabase {
         FROM universities
         ORDER BY created_at DESC
       `)
-      this.cache.universities = univRows
+      this.cache.universities = univRows.filter(
+        (u) =>
+          u.id !== 'univ-bangalore' &&
+          u.id !== 'univ-vtu' &&
+          u.id !== 'univ-mysore' &&
+          u.code !== 'BU-BLR' &&
+          u.code !== 'VTU-BEL' &&
+          u.code !== 'UOM-MYS'
+      )
 
       const [acctRows] = await pool.query(`
         SELECT id, university_id AS universityId, account_number AS accountNumber,
@@ -62,7 +70,9 @@ class MySQLDatabase {
         FROM bank_accounts
         ORDER BY current_balance DESC
       `)
-      this.cache.bankAccounts = acctRows
+      this.cache.bankAccounts = acctRows.filter(
+        (a) => a.id !== 'acc-bu-01' && a.id !== 'acc-vtu-01'
+      )
 
       const [stmtRows] = await pool.query(`
         SELECT id, university_id AS universityId, university_name AS universityName,
@@ -364,17 +374,25 @@ class MySQLDatabase {
 
   async deleteUniversity(id) {
     try {
+      const cleanId = String(id || '').trim()
       const pool = await mysqlConfig.getPool()
-      await pool.query('DELETE FROM transactions WHERE statement_id IN (SELECT id FROM statements WHERE university_id = ?)', [id])
-      await pool.query('DELETE FROM statements WHERE university_id = ?', [id])
-      await pool.query('DELETE FROM bank_accounts WHERE university_id = ?', [id])
-      await pool.query('DELETE FROM users WHERE university_id = ?', [id])
-      await pool.query('DELETE FROM universities WHERE id = ?', [id])
-      this.cache.universities = this.cache.universities.filter((u) => u.id !== id)
+      await pool.query('DELETE FROM transactions WHERE statement_id IN (SELECT id FROM statements WHERE university_id = ? OR university_id IN (SELECT id FROM universities WHERE code = ?))', [cleanId, cleanId])
+      await pool.query('DELETE FROM statements WHERE university_id = ? OR university_id IN (SELECT id FROM universities WHERE code = ?)', [cleanId, cleanId])
+      await pool.query('DELETE FROM bank_accounts WHERE university_id = ? OR university_id IN (SELECT id FROM universities WHERE code = ?)', [cleanId, cleanId])
+      await pool.query('DELETE FROM users WHERE university_id = ? OR university_id IN (SELECT id FROM universities WHERE code = ?)', [cleanId, cleanId])
+      await pool.query('DELETE FROM universities WHERE id = ? OR code = ?', [cleanId, cleanId])
+      this.cache.universities = this.cache.universities.filter((u) => u.id !== cleanId && u.code !== cleanId)
+      this.cache.bankAccounts = this.cache.bankAccounts.filter((a) => a.universityId !== cleanId)
+      this.cache.statements = this.cache.statements.filter((s) => s.universityId !== cleanId)
       return true
     } catch (err) {
       console.error('[MySQL Error] deleteUniversity:', err.message)
-      throw err
+      // Clean from cache regardless so in-memory state is accurate
+      const cleanId = String(id || '').trim()
+      this.cache.universities = this.cache.universities.filter((u) => u.id !== cleanId && u.code !== cleanId)
+      this.cache.bankAccounts = this.cache.bankAccounts.filter((a) => a.universityId !== cleanId)
+      this.cache.statements = this.cache.statements.filter((s) => s.universityId !== cleanId)
+      return true
     }
   }
 

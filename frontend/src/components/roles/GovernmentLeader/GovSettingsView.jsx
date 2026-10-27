@@ -383,7 +383,7 @@ export function GovSettingsView({ onSelectTab, onTriggerToast }) {
               </thead>
               <tbody className="divide-y divide-[#d0d7de]">
                 {filteredUniversities.map((college) => {
-                  const alloc = Number(college.allocatedAmount) || 0
+                  const alloc = Number(college.allocation ?? college.allocatedAmount) || 0
                   const isCopiedOfficial = copiedKey === `off-${college.id}`
                   const isCopiedFinance = copiedKey === `fin-${college.id}`
 
