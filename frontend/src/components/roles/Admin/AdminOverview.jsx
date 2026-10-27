@@ -16,6 +16,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { useFinancialData } from '@/context/FinancialDataContext'
+import { API_BASE_URL } from '@/lib/api'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card'
 import { MetricCard } from '@/components/shared/MetricCard'
 import { Button } from '@/components/ui/Button'
@@ -29,7 +30,7 @@ export function AdminOverview({ onSelectTab, onActionClick, onTriggerToast }) {
   const [mysqlStatus, setMysqlStatus] = useState({ connected: false, config: { user: 'root', host: 'localhost', port: 3306, database: 'gov_finance_intel' } })
 
   useEffect(() => {
-    fetch('http://127.0.0.1:5000/api/admin/mysql-status')
+    fetch(`${API_BASE_URL}/admin/mysql-status`)
       .then((r) => r.json())
       .then((d) => {
         if (d.success) setMysqlStatus(d)
@@ -46,7 +47,7 @@ export function AdminOverview({ onSelectTab, onActionClick, onTriggerToast }) {
 
     setIsConnectingMysql(true)
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/admin/mysql-connect', {
+      const res = await fetch(`${API_BASE_URL}/admin/mysql-connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: mysqlPassword }),

@@ -2,6 +2,8 @@ const mysql = require('mysql2/promise')
 const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 
+const isRemote = (process.env.DB_HOST && process.env.DB_HOST !== '127.0.0.1' && process.env.DB_HOST !== 'localhost')
+
 const DB_CONFIG = {
   host: process.env.DB_HOST || '127.0.0.1',
   port: Number(process.env.DB_PORT) || 3306,
@@ -11,6 +13,7 @@ const DB_CONFIG = {
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {})
 }
 
 let pool = null
@@ -25,16 +28,21 @@ async function getPool() {
 // Initialize MySQL schema and seed data
 async function initMySQL(seedData) {
   try {
-    // 1. Connect without database to ensure database exists
-    const rootConn = await mysql.createConnection({
-      host: DB_CONFIG.host,
-      port: DB_CONFIG.port,
-      user: DB_CONFIG.user,
-      password: DB_CONFIG.password,
-    })
-
-    await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_CONFIG.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`)
-    await rootConn.end()
+    // 1. Connect without database to ensure database exists (local only)
+    if (!isRemote) {
+      try {
+        const rootConn = await mysql.createConnection({
+          host: DB_CONFIG.host,
+          port: DB_CONFIG.port,
+          user: DB_CONFIG.user,
+          password: DB_CONFIG.password,
+        })
+        await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${DB_CONFIG.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`)
+        await rootConn.end()
+      } catch (e) {
+        console.warn('[MySQL] Notice during root DB check:', e.message)
+      }
+    }
 
     // 2. Connect to the database and initialize tables
     const dbPool = await getPool()
