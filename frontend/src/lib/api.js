@@ -232,11 +232,29 @@ export const api = {
     return res.json()
   },
 
-  async login(email, password) {
+  async login(email, password, otp) {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, otp }),
+    })
+    return res.json()
+  },
+
+  async sendOtp(email) {
+    const res = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    return res.json()
+  },
+
+  async verifyOtp(email, otp) {
+    const res = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
     })
     return res.json()
   },

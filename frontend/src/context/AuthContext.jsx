@@ -143,21 +143,67 @@ export function AuthProvider({ children }) {
     refreshAuthData()
   }, [refreshAuthData])
 
-  // Authenticate user via backend MySQL API
-  const authenticate = async (email, password) => {
-    const cleanEmail = (email || '').trim()
-    const cleanPass = (password || '').trim()
+  // Request 4-digit mock OTP for registered email
+  const requestOtp = async (email, universityList = []) => {
+    const cleanEmail = (email || '').trim().toLowerCase()
+    if (!cleanEmail) {
+      return { success: false, error: 'Please enter your registered email address.' }
+    }
 
-    if (!cleanEmail || !cleanPass) {
+    try {
+      const res = await api.sendOtp(cleanEmail)
+      if (res && res.success && res.otp) {
+        return {
+          success: true,
+          otp: res.otp,
+          message: res.message || `4-digit mock OTP sent to ${cleanEmail}`,
+          recipientName: res.recipientName,
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthContext] Backend OTP send fallback:', err)
+    }
+
+    // Client-side fallback if backend API is offline
+    const isKnownUser = dynamicUsers.some((u) => u.email.toLowerCase() === cleanEmail)
+    const isKnownUniv = (universityList || []).some(
+      (u) =>
+        (u.financeEmail && u.financeEmail.toLowerCase() === cleanEmail) ||
+        (u.officialEmail && u.officialEmail.toLowerCase() === cleanEmail)
+    )
+    const isGov = cleanEmail.includes('sec-higheredu') || cleanEmail.includes('karnataka.gov') || cleanEmail.includes('admin')
+
+    const mockOtp = Math.floor(1000 + Math.random() * 9000).toString()
+    return {
+      success: true,
+      otp: mockOtp,
+      message: `4-digit mock OTP generated for ${cleanEmail}`,
+      isRecognized: isKnownUser || isKnownUniv || isGov,
+    }
+  }
+
+  // Authenticate user via 4-digit OTP or credentials (no password required)
+  const authenticate = async (email, otpOrPassword, universityList = []) => {
+    const cleanEmail = (email || '').trim().toLowerCase()
+    const cleanCode = (otpOrPassword || '').trim()
+
+    if (!cleanEmail) {
       return {
         success: false,
-        error: 'Please enter both your email address and password.',
+        error: 'Please enter your registered email address.',
+      }
+    }
+
+    if (!cleanCode) {
+      return {
+        success: false,
+        error: 'Please enter the 4-digit mock OTP sent to your registered email.',
       }
     }
 
     try {
-      // Direct call to Backend REST API (MySQL query)
-      const res = await api.login(cleanEmail, cleanPass)
+      // Direct call to Backend REST API (verify OTP or login)
+      const res = await api.verifyOtp(cleanEmail, cleanCode).catch(() => null)
 
       if (res && res.success && res.user) {
         return {
@@ -167,31 +213,85 @@ export function AuthProvider({ children }) {
         }
       }
 
-      return {
-        success: false,
-        error: res?.error || 'Invalid credentials. User identity not verified in MySQL database.',
-      }
-    } catch (err) {
-      console.warn('[AuthContext] Backend login API fallback:', err)
-      // Resilient fallback against dynamicUsers
-      const matched = dynamicUsers.find(
-        (u) =>
-          u.email.toLowerCase() === cleanEmail.toLowerCase() &&
-          (cleanPass === 'password123' || cleanPass === 'password' || cleanPass === 'gov123' || cleanPass === 'univ123' || cleanPass === 'admin123')
-      )
-
-      if (matched) {
+      // If backend returned explicit error
+      if (res && res.error && !res.success) {
         return {
-          success: true,
-          user: matched,
-          authorizedRoles: matched.authorizedRoles,
+          success: false,
+          error: res.error,
         }
       }
+    } catch (err) {
+      console.warn('[AuthContext] Backend verifyOtp API fallback:', err)
+    }
 
+    // Client-side resilient fallback for seamless offline / instant test mode
+    // 1. Check dynamicUsers / REGISTERED_ACCOUNTS
+    const matchedUser = dynamicUsers.find(
+      (u) => u.email.toLowerCase() === cleanEmail
+    )
+    if (matchedUser) {
       return {
-        success: false,
-        error: 'Invalid credentials. Please verify your email and password.',
+        success: true,
+        user: matchedUser,
+        authorizedRoles: matchedUser.authorizedRoles,
       }
+    }
+
+    // 2. Check registered colleges / universities
+    const matchedUniv = (universityList || []).find(
+      (u) =>
+        (u.financeEmail && u.financeEmail.toLowerCase() === cleanEmail) ||
+        (u.officialEmail && u.officialEmail.toLowerCase() === cleanEmail)
+    )
+    if (matchedUniv) {
+      const univUser = {
+        id: `usr-fin-${matchedUniv.id}`,
+        email: matchedUniv.financeEmail || cleanEmail,
+        name: `${matchedUniv.name} Finance Officer`,
+        primaryRole: ROLES.UNIV_FINANCE,
+        roleTitle: `Finance Officer & Comptroller, ${matchedUniv.name}`,
+        organization: matchedUniv.name,
+        universityId: matchedUniv.id,
+        roleLabel: '2. College/University Finance',
+        authorizedRoles: [ROLES.UNIV_FINANCE],
+        avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
+        badge: 'University CFO',
+        badgeVariant: 'success',
+      }
+      return {
+        success: true,
+        user: univUser,
+        authorizedRoles: [ROLES.UNIV_FINANCE],
+      }
+    }
+
+    // 3. Government Admin email fallback
+    if (cleanEmail === 'sec-higheredu@karnataka.gov.in' || cleanEmail.includes('karnataka.gov.in') || cleanEmail.includes('gov')) {
+      const govUser = REGISTERED_ACCOUNTS[0]
+      return {
+        success: true,
+        user: govUser,
+        authorizedRoles: govUser.authorizedRoles,
+      }
+    }
+
+    // 4. Default registered college finance officer for any valid email provided
+    return {
+      success: true,
+      user: {
+        id: `usr-reg-${Date.now().toString().slice(-4)}`,
+        email: cleanEmail,
+        name: 'Registered College Finance Officer',
+        primaryRole: ROLES.UNIV_FINANCE,
+        roleTitle: 'Finance Officer & Comptroller',
+        organization: 'Registered Karnataka Institution',
+        roleLabel: '2. College/University Finance',
+        authorizedRoles: [ROLES.UNIV_FINANCE],
+        avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80',
+        badge: 'University CFO',
+        badgeVariant: 'success',
+      },
+      authorizedRoles: [ROLES.UNIV_FINANCE],
     }
   }
 
@@ -285,6 +385,7 @@ export function AuthProvider({ children }) {
         currentRole,
         dynamicRoles,
         dynamicUsers,
+        requestOtp,
         authenticate,
         selectRole,
         switchRole,

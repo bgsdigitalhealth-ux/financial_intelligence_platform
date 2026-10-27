@@ -391,13 +391,13 @@ export function AddCollegeModal({ isOpen, onClose, onTriggerToast }) {
                 {createdCredentials.name} ({createdCredentials.code}) is registered!
               </div>
               <p className="text-[11px] text-emerald-800">
-                The authorized finance user can now log in with the credentials below.
+                The authorized finance user can now log in using this registered email and instant 4-digit mock OTP (no password needed).
               </p>
             </div>
 
             <div className="bg-[#f6f8fa] p-3.5 rounded-lg border border-[#d0d7de] space-y-2.5">
               <div>
-                <div className="text-[10px] font-semibold text-[#57606a] uppercase">Authorized Finance Email</div>
+                <div className="text-[10px] font-semibold text-[#57606a] uppercase">Registered Login Email</div>
                 <div className="flex items-center justify-between font-mono font-bold text-xs text-[#1f2328] mt-0.5">
                   <span>{createdCredentials.financeEmail}</span>
                   <button
@@ -409,35 +409,15 @@ export function AddCollegeModal({ isOpen, onClose, onTriggerToast }) {
                 </div>
               </div>
 
-              {createdCredentials.credentialMode === 'password' ? (
-                <div>
-                  <div className="text-[10px] font-semibold text-[#57606a] uppercase">Temporary Password</div>
-                  <div className="flex items-center justify-between font-mono font-bold text-xs text-[#1f2328] mt-0.5">
-                    <span>{createdCredentials.tempPassword}</span>
-                    <button
-                      onClick={() => handleCopy(createdCredentials.tempPassword, 'cred-pwd')}
-                      className="text-[#0969da] hover:underline cursor-pointer text-[11px]"
-                    >
-                      {copiedKey === 'cred-pwd' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
+              <div>
+                <div className="text-[10px] font-semibold text-[#57606a] uppercase">Login Authentication Method</div>
+                <div className="flex items-center justify-between font-bold text-xs text-[#0969da] mt-0.5">
+                  <span>4-Digit Mock OTP (Sent on Login)</span>
+                  <span className="text-[10px] font-semibold bg-[#ddf4ff] text-[#0969da] px-1.5 py-0.5 rounded border border-[#54aeff]/30">
+                    Password-Free
+                  </span>
                 </div>
-              ) : (
-                <div>
-                  <div className="text-[10px] font-semibold text-[#57606a] uppercase">64-Character Activation Token</div>
-                  <div className="font-mono text-[10px] text-[#1f2328] bg-white p-2 rounded border border-[#d0d7de] break-all select-all mt-1">
-                    {createdCredentials.activationToken}
-                  </div>
-                  <div className="flex justify-end mt-1">
-                    <button
-                      onClick={() => handleCopy(createdCredentials.activationToken, 'cred-token')}
-                      className="text-[#0969da] hover:underline cursor-pointer text-[11px] font-semibold"
-                    >
-                      {copiedKey === 'cred-token' ? 'Copied!' : 'Copy Activation Token'}
-                    </button>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
             <div className="flex justify-end pt-2 border-t border-[#d0d7de]">

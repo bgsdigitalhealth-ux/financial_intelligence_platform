@@ -290,16 +290,12 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
 
               <div className="bg-white p-3 rounded-md border border-[#d0d7de] flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-[#57606a] uppercase font-semibold block">Default Login Passphrase</span>
-                  <span className="font-mono text-xs font-bold text-[#1f2328]">password123</span>
+                  <span className="text-[10px] text-[#57606a] uppercase font-semibold block">Authentication Method</span>
+                  <span className="font-mono text-xs font-bold text-[#0969da]">4-Digit Mock OTP</span>
                 </div>
-                <button
-                  onClick={() => handleCopy('password123', 'Password')}
-                  className="p-1 hover:bg-[#f6f8fa] rounded text-[#57606a] hover:text-[#0969da] cursor-pointer"
-                  title="Copy Password"
-                >
-                  {copiedText === 'password123' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
+                <Badge variant="outline" className="text-[9px] text-[#0969da] border-[#0969da]/30">
+                  Password-Free
+                </Badge>
               </div>
 
               <div className="bg-white p-3 rounded-md border border-[#d0d7de] flex items-center justify-between">

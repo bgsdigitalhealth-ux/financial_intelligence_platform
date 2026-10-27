@@ -6,57 +6,42 @@ import {
   Lock,
   Mail,
   Key,
-  Eye,
-  EyeOff,
   Users,
   AlertCircle,
   CheckCircle2,
   ArrowRight,
   ShieldAlert,
   Sparkles,
-  ChevronRight,
-  User,
   ArrowLeft,
   KeyRound,
+  Copy,
+  Check,
+  Send,
+  RefreshCw,
 } from 'lucide-react'
 import { useAuth, REGISTERED_ACCOUNTS, ROLE_DETAILS } from '@/context/AuthContext'
+import { useFinancialData } from '@/context/FinancialDataContext'
 import { ROLES } from '@/data/mockFinancialData'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/Card'
-import { api } from '@/lib/api'
 import { KarnatakaGovLogo } from '@/components/shared/KarnatakaGovLogo'
 
 export function LoginPage({ onLoginSuccess, onTriggerToast }) {
-  const { authenticate, selectRole, dynamicRoles, dynamicUsers } = useAuth()
+  const { authenticate, selectRole, dynamicRoles, dynamicUsers, requestOtp } = useAuth()
+  const { colleges } = useFinancialData()
 
-  // State Machine: 'LOGIN' | 'ACTIVATE' | 'SELECT_ROLE'
+  // State Machine: 'LOGIN' | 'SELECT_ROLE'
   const [step, setStep] = useState('LOGIN')
 
-  // Form Fields
+  // Form Fields - Registered Email & 4-Digit Mock OTP (No Password)
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [otp, setOtp] = useState('')
+  const [sentOtp, setSentOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [isSendingOtp, setIsSendingOtp] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-
-  // Activation Fields
-  const [activationToken, setActivationToken] = useState('')
-  const [activationPassword, setActivationPassword] = useState('')
-  const [activationConfirmPassword, setActivationConfirmPassword] = useState('')
-  const [activationSuccessMsg, setActivationSuccessMsg] = useState('')
-  const [isActivating, setIsActivating] = useState(false)
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const tokenParam = params.get('token')
-    const actionParam = params.get('action')
-    if (tokenParam || actionParam === 'activate') {
-      setStep('ACTIVATE')
-      if (tokenParam) {
-        setActivationToken(tokenParam)
-      }
-    }
-  }, [])
+  const [otpCountdown, setOtpCountdown] = useState(0)
+  const [copiedOtp, setCopiedOtp] = useState(false)
 
   // Error State matching flowchart: "Show error (Invalid credentials)"
   const [errorMessage, setErrorMessage] = useState('')
@@ -65,6 +50,14 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
   const [authenticatedUser, setAuthenticatedUser] = useState(null)
   const [selectedRoleKey, setSelectedRoleKey] = useState('')
   const [roleAuthError, setRoleAuthError] = useState('')
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (otpCountdown > 0) {
+      const timer = setTimeout(() => setOtpCountdown((c) => c - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [otpCountdown])
 
   // Dynamic 3 Roles (Loaded from MySQL /api/auth/roles)
   const rolesToDisplay = useMemo(() => {
@@ -79,7 +72,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
         badgeVariant: r.badgeVariant || (r.id === 'gov_leader' ? 'primary' : r.id === 'univ_finance' ? 'success' : 'purple'),
         scopeDescription:
           r.id === 'gov_leader'
-            ? 'Statewide higher education oversight, view-only progress tracking of all 32 Karnataka colleges, comprehensive reports, multi-bank treasury, and statutory audit monitoring.'
+            ? 'Statewide higher education oversight, view-only progress tracking of all Karnataka colleges, comprehensive reports, multi-bank treasury, and statutory audit monitoring.'
             : r.scopeDescription,
         accentColor: r.accentColor,
         iconName: r.iconName,
@@ -92,82 +85,157 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
     ]
   }, [dynamicRoles])
 
-  // Dynamic user accounts (Loaded from MySQL /api/auth/users)
-  const usersToDisplay = useMemo(() => {
-    return dynamicUsers && dynamicUsers.length > 0 ? dynamicUsers : REGISTERED_ACCOUNTS
-  }, [dynamicUsers])
+  // Registered Institutions & Department Emails for instant quick selection
+  const quickAccounts = useMemo(() => {
+    const list = [
+      {
+        name: 'Govt Admin (Dept Higher Ed)',
+        email: 'sec-higheredu@karnataka.gov.in',
+        role: 'Government Admin',
+        badge: 'Govt Admin',
+      },
+    ]
 
-  // Quick fill helper for effortless testing
-  const handleAutofill = (acc) => {
-    setEmail(acc.email)
-    setPassword(acc.password || 'password123')
-    setErrorMessage('')
-  }
-
-  // Handle Account Activation (Sets password for authorized finance email using token)
-  const handleActivationSubmit = async (e) => {
-    e.preventDefault()
-    setErrorMessage('')
-    setActivationSuccessMsg('')
-
-    if (!activationToken.trim()) {
-      setErrorMessage('Please enter the secure activation token.')
-      return
-    }
-    if (!activationPassword) {
-      setErrorMessage('Please enter a secure password.')
-      return
-    }
-    if (activationPassword.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.')
-      return
-    }
-    if (activationPassword !== activationConfirmPassword) {
-      setErrorMessage('Passwords do not match.')
-      return
-    }
-
-    setIsActivating(true)
-    try {
-      const res = await api.activateAccount({
-        token: activationToken.trim(),
-        password: activationPassword.trim(),
+    // Populate from active colleges list
+    if (colleges && colleges.length > 0) {
+      colleges.forEach((c) => {
+        if (c.financeEmail) {
+          list.push({
+            name: c.name,
+            email: c.financeEmail,
+            role: 'College Finance Officer',
+            badge: c.code || 'University',
+          })
+        }
       })
-      setIsActivating(false)
-      setActivationSuccessMsg(res.message || 'Account activated successfully! You may now sign in.')
-      if (res.email) {
-        setEmail(res.email)
-      }
-      setStep('LOGIN')
-      if (onTriggerToast) {
-        onTriggerToast('Account Activated', 'Your password has been established securely in MySQL. Please sign in.', 'success')
+    } else {
+      list.push(
+        {
+          name: 'Bangalore University',
+          email: 'fo@bangaloreuniversity.ac.in',
+          role: 'College Finance Officer',
+          badge: 'BU-BLR',
+        },
+        {
+          name: 'VTU Belagavi',
+          email: 'finance@vtu.ac.in',
+          role: 'College Finance Officer',
+          badge: 'VTU-BEL',
+        },
+        {
+          name: 'University of Mysore',
+          email: 'finance@uni-mysore.ac.in',
+          role: 'College Finance Officer',
+          badge: 'UOM-MYS',
+        }
+      )
+    }
+
+    return list
+  }, [colleges])
+
+  // Handle Requesting / Sending 4-Digit Mock OTP to registered email
+  const handleSendOtp = async (targetEmail = email) => {
+    const clean = (targetEmail || '').trim()
+    if (!clean) {
+      setErrorMessage('Please enter your registered college or government email address.')
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(clean)) {
+      setErrorMessage('Please enter a valid email address (e.g. fo@bangaloreuniversity.ac.in).')
+      return
+    }
+
+    setErrorMessage('')
+    setIsSendingOtp(true)
+
+    try {
+      const res = await requestOtp(clean, colleges)
+      setIsSendingOtp(false)
+
+      if (res && res.success && res.otp) {
+        setSentOtp(res.otp)
+        setOtpSent(true)
+        setOtp(res.otp) // Auto-fill for friction-free verification
+        setOtpCountdown(60)
+
+        if (onTriggerToast) {
+          onTriggerToast(
+            '4-Digit Mock OTP Sent',
+            `Mock verification code for ${clean}: ${res.otp}`,
+            'info'
+          )
+        }
+      } else {
+        setErrorMessage(res?.error || 'Failed to generate 4-digit OTP. Please verify your email.')
       }
     } catch (err) {
-      setIsActivating(false)
-      setErrorMessage(err.message || 'Activation failed. Token may be expired or invalid.')
+      setIsSendingOtp(false)
+      const mock = Math.floor(1000 + Math.random() * 9000).toString()
+      setSentOtp(mock)
+      setOtpSent(true)
+      setOtp(mock)
+      setOtpCountdown(60)
+      if (onTriggerToast) {
+        onTriggerToast('4-Digit Mock OTP Sent', `Mock verification code: ${mock}`, 'info')
+      }
     }
   }
 
-  // Handle Step 1: Login Form Submission (Authenticates against MySQL)
+  // Quick fill helper for effortless testing
+  const handleQuickSelect = (accEmail) => {
+    setEmail(accEmail)
+    setErrorMessage('')
+    handleSendOtp(accEmail)
+  }
+
+  // Copy OTP to clipboard
+  const handleCopyOtp = (code) => {
+    if (!code) return
+    navigator.clipboard?.writeText(code)
+    setCopiedOtp(true)
+    setTimeout(() => setCopiedOtp(false), 2000)
+    if (onTriggerToast) {
+      onTriggerToast('Copied', `OTP ${code} copied to clipboard`, 'success')
+    }
+  }
+
+  // Handle Step 1: Login Form Submission via 4-Digit OTP (No password needed)
   const handleLoginSubmit = async (e) => {
     e.preventDefault()
     setErrorMessage('')
+
+    if (!otpSent) {
+      return handleSendOtp()
+    }
+
+    if (!otp.trim()) {
+      setErrorMessage('Please enter the 4-digit mock OTP sent to your registered email.')
+      return
+    }
+
+    if (otp.trim().length !== 4) {
+      setErrorMessage('OTP must be exactly 4 digits.')
+      return
+    }
+
     setIsLoading(true)
 
     try {
-      const result = await authenticate(email, password)
+      const result = await authenticate(email, otp.trim(), colleges)
       setIsLoading(false)
 
       if (!result.success) {
-        // Flowchart branch: Invalid -> Show error (Invalid credentials)
-        setErrorMessage(result.error || 'Invalid credentials. Please verify your email and password.')
+        setErrorMessage(result.error || 'Invalid 4-digit OTP. Please enter the verification code sent to your registered email.')
         if (onTriggerToast) {
-          onTriggerToast('Authentication Failed', result.error || 'Invalid credentials provided.', 'danger')
+          onTriggerToast('Authentication Failed', result.error || 'Invalid 4-digit OTP provided.', 'danger')
         }
         return
       }
 
-      // Flowchart branch: Valid -> Authenticate User -> Proceed to Select Role
+      // Valid Identity -> Authenticate User -> Proceed to Select Role
       const user = result.user
       setAuthenticatedUser(user)
       setSelectedRoleKey(user.primaryRole || user.authorizedRoles?.[0] || 'gov_leader')
@@ -237,7 +305,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                 </span>
               </div>
               <p className="text-xs text-[#57606a] mt-0.5 leading-tight">
-                University Financial Intelligence Platform • System Flow Chart Architecture
+                University Financial Intelligence Platform • Single Sign-On OTP Authentication
               </p>
             </div>
           </div>
@@ -248,11 +316,11 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
           </div>
         </div>
 
-        {/* Official Purpose Banner from Flowchart Mockup */}
+        {/* Official Purpose Banner */}
         <div className="max-w-6xl mx-auto mt-2.5 pt-2 border-t border-[#eaeef2] flex items-center justify-between text-xs text-[#57606a]">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[#0969da] uppercase tracking-wider text-[10px]">Purpose:</span>
-            <span>Monitor, analyze, and ensure timely submission and compliance of quarterly financial statements for all 32 government and open universities in Karnataka.</span>
+            <span>Monitor, analyze, and ensure timely submission and compliance of quarterly financial statements for all registered government and public universities in Karnataka.</span>
           </div>
         </div>
       </header>
@@ -260,7 +328,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
       {/* Main Authentication Flow Container */}
       <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
         <div className="w-full max-w-md">
-          {/* STEP 1: LOGIN (Email & Password Credentials) */}
+          {/* STEP 1: LOGIN (Registered Email & 4-Digit Mock OTP - No Password) */}
           {step === 'LOGIN' && (
             <div className="space-y-4">
               <div className="text-center space-y-1 mb-2">
@@ -271,19 +339,11 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                   University Financial Portal Login
                 </h1>
                 <p className="text-xs text-[#57606a]">
-                  Enter your official Government or University credentials (email / password)
+                  Login with your registered College/University or Government email via 4-digit mock OTP
                 </p>
               </div>
 
-              {/* Activation Success Banner */}
-              {activationSuccessMsg && (
-                <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs text-green-800 flex items-start gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
-                  <div className="font-semibold">{activationSuccessMsg}</div>
-                </div>
-              )}
-
-              {/* FLOWCHART STEP: Show error (Invalid credentials) */}
+              {/* Error Alert Banner */}
               {errorMessage && (
                 <div
                   role="alert"
@@ -291,7 +351,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                 >
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-[#cf222e]" />
                   <div className="flex-1">
-                    <div className="font-semibold">Authentication Failed</div>
+                    <div className="font-semibold">Authentication Notice</div>
                     <div className="mt-0.5 leading-relaxed text-[#82071e]">{errorMessage}</div>
                   </div>
                 </div>
@@ -300,220 +360,238 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
               {/* Login Card */}
               <div className="bg-white border border-[#d0d7de] rounded-lg shadow-sm p-5 space-y-4">
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  {/* Email Input */}
+                  {/* Registered Email Input */}
                   <div>
-                    <label
-                      htmlFor="auth-email"
-                      className="block text-xs font-semibold text-[#1f2328] mb-1.5"
-                    >
-                      Email Address
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label
+                        htmlFor="auth-email"
+                        className="block text-xs font-semibold text-[#1f2328]"
+                      >
+                        Registered Email Address
+                      </label>
+                      {otpSent && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOtpSent(false)
+                            setOtp('')
+                            setErrorMessage('')
+                          }}
+                          className="text-[11px] text-[#0969da] hover:underline font-medium cursor-pointer"
+                        >
+                          Change Email
+                        </button>
+                      )}
+                    </div>
                     <div className="relative">
                       <Mail className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
                       <input
                         id="auth-email"
                         type="email"
                         required
+                        disabled={otpSent}
                         value={email}
                         onChange={(e) => {
                           setEmail(e.target.value)
                           setErrorMessage('')
                         }}
-                        placeholder="Authorized finance email (e.g. finance@university.edu)"
-                        className="w-full h-9 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs text-[#1f2328] placeholder:text-[#656d76] focus:bg-white focus:border-[#0969da] focus:outline-none focus:ring-1 focus:ring-[#0969da] transition-colors"
+                        placeholder="e.g. fo@bangaloreuniversity.ac.in"
+                        className={`w-full h-9 rounded-md border border-[#d0d7de] pl-9 pr-3 text-xs text-[#1f2328] placeholder:text-[#656d76] focus:border-[#0969da] focus:outline-none focus:ring-1 focus:ring-[#0969da] transition-colors ${
+                          otpSent ? 'bg-[#f6f8fa] font-medium text-[#57606a]' : 'bg-white'
+                        }`}
                       />
                     </div>
                   </div>
 
-                  {/* Password Input */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
+                  {/* High-Visibility Mock OTP Notification Banner */}
+                  {otpSent && sentOtp && (
+                    <div className="rounded-lg border border-[#0969da]/30 bg-[#ddf4ff] p-3 space-y-2 animate-in fade-in-50 duration-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-[#0969da]">
+                          <Sparkles className="h-4 w-4 text-[#0969da]" />
+                          <span>Mock OTP Sent to Registered Email</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-[#57606a]">
+                          Valid for 10 mins
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-white rounded-md p-2.5 border border-[#54aeff]/30">
+                        <div>
+                          <div className="text-[10px] text-[#57606a] uppercase font-semibold">
+                            4-Digit Verification Code
+                          </div>
+                          <div className="font-mono text-xl font-extrabold tracking-[0.3em] text-[#0969da]">
+                            {sentOtp}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCopyOtp(sentOtp)}
+                            className="text-[11px] h-7 px-2 border-[#0969da]/30 text-[#0969da] hover:bg-[#ddf4ff]"
+                          >
+                            {copiedOtp ? (
+                              <Check className="h-3 w-3 text-emerald-600 mr-1" />
+                            ) : (
+                              <Copy className="h-3 w-3 mr-1" />
+                            )}
+                            {copiedOtp ? 'Copied' : 'Copy'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            onClick={() => {
+                              setOtp(sentOtp)
+                              setErrorMessage('')
+                            }}
+                            className="text-[11px] h-7 px-2 font-semibold"
+                          >
+                            Auto-fill OTP
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="text-[10px] text-[#57606a] flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                        <span>Password is not required. Use the 4-digit code above to sign in.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4-Digit OTP Input Field (Shown once OTP is requested) */}
+                  {otpSent ? (
+                    <div className="space-y-1.5">
                       <label
-                        htmlFor="auth-password"
+                        htmlFor="auth-otp"
                         className="block text-xs font-semibold text-[#1f2328]"
                       >
-                        Password / Passphrase
+                        Enter 4-Digit OTP
                       </label>
-                    </div>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
-                      <input
-                        id="auth-password"
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => {
-                          setPassword(e.target.value)
-                          setErrorMessage('')
-                        }}
-                        placeholder="Enter password"
-                        className="w-full h-9 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-9 text-xs text-[#1f2328] placeholder:text-[#656d76] focus:bg-white focus:border-[#0969da] focus:outline-none focus:ring-1 focus:ring-[#0969da] transition-colors"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-2.5 text-[#57606a] hover:text-[#1f2328] cursor-pointer"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      <div className="relative">
+                        <KeyRound className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
+                        <input
+                          id="auth-otp"
+                          type="text"
+                          maxLength={4}
+                          autoFocus
+                          required
+                          value={otp}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 4)
+                            setOtp(val)
+                            setErrorMessage('')
+                          }}
+                          placeholder="• • • •"
+                          className="w-full h-10 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-center font-mono text-lg font-bold tracking-[0.4em] text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none focus:ring-1 focus:ring-[#0969da] transition-colors"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1">
+                        <span className="text-[11px] text-[#57606a]">
+                          {otpCountdown > 0 ? (
+                            `Resend OTP in ${otpCountdown}s`
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSendOtp(email)}
+                              className="text-[#0969da] hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Resend 4-digit OTP
+                            </button>
+                          )}
+                        </span>
+
+                        <span className="text-[10px] text-[#57606a] font-mono">
+                          {otp.length}/4 digits
+                        </span>
+                      </div>
+
+                      {/* Verify & Sign In Button */}
+                      <Button
+                        type="submit"
+                        variant="blue"
+                        size="md"
+                        className="w-full justify-center h-9 text-xs font-semibold shadow-xs mt-3 cursor-pointer"
+                        disabled={isLoading}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
+                        {isLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                            Verifying OTP...
+                          </span>
                         ) : (
-                          <Eye className="h-4 w-4" />
+                          <span className="flex items-center gap-1.5">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                            Verify OTP & Sign In
+                          </span>
                         )}
+                      </Button>
+                    </div>
+                  ) : (
+                    /* Initial Button: Send 4-Digit Mock OTP */
+                    <Button
+                      type="submit"
+                      variant="blue"
+                      size="md"
+                      className="w-full justify-center h-9 text-xs font-semibold shadow-xs cursor-pointer"
+                      disabled={isSendingOtp}
+                    >
+                      {isSendingOtp ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          Sending 4-Digit OTP...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          <Send className="h-3.5 w-3.5" />
+                          Send 4-Digit Mock OTP
+                        </span>
+                      )}
+                    </Button>
+                  )}
+                </form>
+
+                {/* Quick Selection Helper for Registered Institutions */}
+                <div className="pt-3 border-t border-[#eaeef2] space-y-2">
+                  <div className="text-[11px] font-semibold text-[#57606a] flex items-center justify-between">
+                    <span>Quick Select Registered Institutions:</span>
+                    <span className="text-[10px] text-[#0969da]">Instant OTP</span>
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {quickAccounts.slice(0, 5).map((acc) => (
+                      <button
+                        key={acc.email}
+                        type="button"
+                        onClick={() => handleQuickSelect(acc.email)}
+                        className={`w-full text-left p-2 rounded-md border text-xs transition-all flex items-center justify-between group cursor-pointer ${
+                          email === acc.email
+                            ? 'border-[#0969da] bg-[#ddf4ff]/40 text-[#0969da]'
+                            : 'border-[#d0d7de]/70 bg-white hover:bg-[#f6f8fa] text-[#1f2328]'
+                        }`}
+                      >
+                        <div className="truncate pr-2">
+                          <div className="font-semibold text-[11px] text-[#1f2328] group-hover:text-[#0969da] truncate">
+                            {acc.name}
+                          </div>
+                          <div className="font-mono text-[10px] text-[#57606a] truncate">
+                            {acc.email}
+                          </div>
+                        </div>
+                        <Badge
+                          variant={acc.role === 'Government Admin' ? 'primary' : 'outline'}
+                          className="text-[9px] shrink-0"
+                        >
+                          {acc.badge}
+                        </Badge>
                       </button>
-                    </div>
+                    ))}
                   </div>
-
-                  {/* Sign In Button */}
-                  <Button
-                    type="submit"
-                    variant="blue"
-                    size="md"
-                    className="w-full justify-center h-9 text-xs font-semibold shadow-xs"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center gap-2">
-                        <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        Authenticating User...
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1.5">
-                        <Lock className="h-3.5 w-3.5" />
-                        Authenticate & Continue
-                      </span>
-                    )}
-                  </Button>
-                </form>
-
-                <div className="pt-2 text-center border-t border-[#eaeef2]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep('ACTIVATE')
-                      setErrorMessage('')
-                      setActivationSuccessMsg('')
-                    }}
-                    className="text-xs text-[#0969da] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
-                  >
-                    <KeyRound className="h-3 w-3" />
-                    Have an activation token? Activate your account
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP: ACTIVATE ACCOUNT WITH SECURE TOKEN */}
-          {step === 'ACTIVATE' && (
-            <div className="space-y-4">
-              <div className="text-center space-y-1 mb-2">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#ddf4ff] border border-[#0969da]/30 text-[#0969da] mb-2 font-bold text-xl">
-                  <KeyRound className="h-6 w-6" />
-                </div>
-                <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">
-                  Activate College Finance Account
-                </h1>
-                <p className="text-xs text-[#57606a]">
-                  Establish your secure password using the invitation token generated by Government Admin
-                </p>
-              </div>
-
-              {errorMessage && (
-                <div
-                  role="alert"
-                  className="rounded-md border border-[#cf222e]/40 bg-[#ffebe9] p-3 text-xs text-[#cf222e] flex items-start gap-2.5"
-                >
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-[#cf222e]" />
-                  <div className="flex-1 font-semibold">{errorMessage}</div>
-                </div>
-              )}
-
-              <div className="bg-white border border-[#d0d7de] rounded-lg shadow-sm p-5 space-y-4">
-                <form onSubmit={handleActivationSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-[#1f2328] mb-1.5">
-                      Activation Token <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
-                      <input
-                        type="text"
-                        required
-                        value={activationToken}
-                        onChange={(e) => {
-                          setActivationToken(e.target.value)
-                          setErrorMessage('')
-                        }}
-                        placeholder="Paste your 64-character activation token"
-                        className="w-full h-9 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs font-mono text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-[#1f2328] mb-1.5">
-                      Establish New Password <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
-                      <input
-                        type="password"
-                        required
-                        value={activationPassword}
-                        onChange={(e) => {
-                          setActivationPassword(e.target.value)
-                          setErrorMessage('')
-                        }}
-                        placeholder="At least 6 characters"
-                        className="w-full h-9 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-[#1f2328] mb-1.5">
-                      Confirm New Password <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
-                      <input
-                        type="password"
-                        required
-                        value={activationConfirmPassword}
-                        onChange={(e) => {
-                          setActivationConfirmPassword(e.target.value)
-                          setErrorMessage('')
-                        }}
-                        placeholder="Re-enter password"
-                        className="w-full h-9 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    variant="blue"
-                    size="md"
-                    className="w-full justify-center h-9 text-xs font-semibold"
-                    disabled={isActivating}
-                  >
-                    {isActivating ? 'Verifying & Activating...' : 'Activate & Establish Password'}
-                  </Button>
-                </form>
-
-                <div className="pt-2 text-center border-t border-[#eaeef2]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStep('LOGIN')
-                      setErrorMessage('')
-                    }}
-                    className="text-xs text-[#0969da] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
-                  >
-                    <ArrowLeft className="h-3 w-3" />
-                    Already activated? Sign In
-                  </button>
                 </div>
               </div>
             </div>
@@ -561,12 +639,14 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                   size="sm"
                   onClick={() => {
                     setStep('LOGIN')
+                    setOtpSent(false)
+                    setOtp('')
                     setRoleAuthError('')
                   }}
-                  className="text-xs text-[#57606a] hover:text-[#1f2328]"
+                  className="text-xs text-[#57606a] hover:text-[#1f2328] cursor-pointer"
                 >
                   <ArrowLeft className="h-3 w-3 mr-1" />
-                  Switch User
+                  Switch Email
                 </Button>
               </div>
 
@@ -658,7 +738,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                   type="submit"
                   variant="blue"
                   size="md"
-                  className="w-full justify-center h-9 text-xs font-semibold shadow-xs mt-2"
+                  className="w-full justify-center h-9 text-xs font-semibold shadow-xs mt-2 cursor-pointer"
                 >
                   <span>Launch Platform Console</span>
                   <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
@@ -671,7 +751,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
 
       {/* Footer */}
       <footer className="border-t border-[#d0d7de] bg-white py-3 px-4 text-center text-xs text-[#57606a]">
-        GovFinanceIntel Platform • Role-Based Authentication & Authorization Architecture
+        GovFinanceIntel Platform • Password-Free 4-Digit Mock OTP Authentication Architecture
       </footer>
     </div>
   )
