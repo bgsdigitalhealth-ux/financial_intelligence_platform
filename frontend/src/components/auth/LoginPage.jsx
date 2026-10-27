@@ -401,65 +401,6 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                   </button>
                 </div>
               </div>
-
-              {/* STEP: ACTIVATE ACCOUNT */}
-              {step === 'ACTIVATE' && null}
-
-              {/* Quick Demo Credentials Autofill Picker */}
-              <div className="bg-white border border-[#d0d7de] rounded-lg p-3 space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-semibold text-[#57606a] uppercase tracking-wider">
-                  <span className="flex items-center gap-1">
-                    <Sparkles className="h-3.5 w-3.5 text-[#0969da]" />
-                    1-Click Demo Accounts (By Role)
-                  </span>
-                  <span className="text-[10px] lowercase text-[#656d76]">click to autofill</span>
-                </div>
-
-                <div className="grid grid-cols-1 gap-1.5">
-                  {usersToDisplay.map((acc) => {
-                    const isSelected = email === acc.email
-                    return (
-                      <button
-                        key={acc.id}
-                        type="button"
-                        onClick={() => handleAutofill(acc)}
-                        className={`w-full flex items-center justify-between p-2 rounded-md border text-left text-xs transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'border-[#0969da] bg-[#ddf4ff]/50 text-[#0969da]'
-                            : 'border-[#d0d7de] bg-[#f6f8fa] hover:bg-white text-[#1f2328]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 truncate">
-                          <img
-                            src={acc.avatar}
-                            alt={acc.name}
-                            className="h-6 w-6 rounded-full object-cover border border-[#d0d7de] shrink-0"
-                          />
-                          <div className="truncate">
-                            <div className="font-semibold text-xs leading-none">{acc.name}</div>
-                            <div className="text-[11px] text-[#57606a] font-mono truncate">{acc.email}</div>
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 flex items-center gap-1 text-[11px]">
-                          <Badge
-                            variant={
-                              acc.primaryRole === ROLES.GOV_LEADER
-                                ? 'primary'
-                                : acc.primaryRole === ROLES.UNIV_FINANCE
-                                ? 'success'
-                                : 'purple'
-                            }
-                            className="text-[10px]"
-                          >
-                            {acc.badge}
-                          </Badge>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
             </div>
           )}
 
