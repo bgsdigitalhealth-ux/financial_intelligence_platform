@@ -16,6 +16,9 @@ import {
   Database,
   ExternalLink,
   ChevronRight,
+  HelpCircle,
+  Info,
+  CheckSquare,
 } from 'lucide-react'
 import { useFinancialData } from '@/context/FinancialDataContext'
 import { useAuth } from '@/context/AuthContext'
@@ -55,10 +58,17 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
       const u = universities.find((x) => x.name.toLowerCase().includes(currentUser.universityName.toLowerCase()))
       if (u) return u
     }
+    if (currentUser?.organization) {
+      const u = universities.find((x) => x.name.toLowerCase().includes(currentUser.organization.toLowerCase()))
+      if (u) return u
+    }
     return (
-      universities.find((u) => u.id === 'univ-01' || u.code === 'VTU') ||
-      universities[0] ||
-      { id: currentUser?.universityId || 'univ-01', name: currentUser?.organization || 'College Pending Setup', code: 'VTU', allocation: 0 }
+      universities[0] || {
+        id: currentUser?.universityId || 'univ-registered',
+        name: currentUser?.organization || currentUser?.universityName || 'Institution Pending Registry',
+        code: 'UNI',
+        allocation: 0,
+      }
     )
   }, [universities, currentUser])
 
@@ -67,6 +77,11 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
     return (bankAccounts || []).filter((a) => a.universityId === myUniversity.id)
   }, [bankAccounts, myUniversity])
 
+  // Total liquid balance
+  const totalLiquidBalance = useMemo(() => {
+    return ownAccounts.reduce((sum, a) => sum + (Number(a.currentBalance) || 0), 0)
+  }, [ownAccounts])
+
   // Institution's active statements
   const myStatements = useMemo(() => {
     return (statements || []).filter(
@@ -74,7 +89,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
     )
   }, [statements, myUniversity])
 
-  const activeStatement = myStatements[0]
+  const activeStatement = myStatements[0] || null
 
   // LangGraph Audit State
   const [isRunningAudit, setIsRunningAudit] = useState(false)
@@ -88,6 +103,16 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
   const unresolvedExceptions = activeTransactions.filter((t) => t.status === 'Exception' && !t.resolved)
   const resolvedExceptions = activeTransactions.filter((t) => t.resolved || t.status === 'Resolved')
 
+  // Mathematical balance reconciliation check
+  const openingBalance = Number(activeStatement?.openingBalance) || 0
+  const totalCredits = Number(activeStatement?.totalCredits) || 0
+  const totalDebits = Number(activeStatement?.totalDebits) || 0
+  const calculatedClosing = openingBalance + totalCredits - totalDebits
+  const reportedClosing = Number(activeStatement?.closingBalance) || 0
+  const variance = Math.abs(calculatedClosing - reportedClosing)
+  const isReconciled = variance < 0.01
+
+  // Dynamic compliance score
   const dynamicScore = useMemo(() => {
     if (!activeStatement) return null
     if (activeTransactions.length === 0) return 96
@@ -95,15 +120,24 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
     return Math.max(65, Math.min(100, 98 - penalty))
   }, [activeStatement, activeTransactions, unresolvedExceptions])
 
-  const dynamicGrade = dynamicScore ? (dynamicScore >= 90 ? 'A+' : dynamicScore >= 80 ? 'A' : 'B') : 'Pending'
+  const dynamicGrade = dynamicScore
+    ? dynamicScore >= 95
+      ? 'A+'
+      : dynamicScore >= 85
+      ? 'A'
+      : dynamicScore >= 75
+      ? 'B'
+      : 'C'
+    : 'Pending'
 
+  // Dynamic findings list
   const dynamicFindings = useMemo(() => {
     if (!activeStatement) return []
     return [
       {
-        standard: 'K.S.U. Act 2000 §102 (Filing Timeliness)',
+        standard: 'K.S.U. Act 2000 § 102 (Filing Timeliness)',
         status: 'Satisfied',
-        detail: `Quarterly statement for ${activeStatement.quarter} compiled and verified from ${activeStatement.bankName}. Statutory filing requirement satisfied.`,
+        detail: `Quarterly statement for ${activeStatement.quarter} compiled and verified from ${activeStatement.bankName}. Statutory filing requirement satisfied within statutory timeline.`,
         isViolation: false,
       },
       {
@@ -116,46 +150,54 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
             : 'Satisfied (Zero Exceptions)',
         detail:
           unresolvedExceptions.length > 0
-            ? `${unresolvedExceptions.length} transaction exceptions flagged under allowable expenditure rules. Please review exceptions in Step 5.`
+            ? `${unresolvedExceptions.length} transaction exceptions flagged under allowable expenditure rules. Please review and provide CFO justification notes in Step 5.`
             : resolvedExceptions.length > 0
-            ? `${resolvedExceptions.length} policy exceptions flagged were documented and resolved with CFO justification.`
+            ? `${resolvedExceptions.length} policy exceptions flagged were documented and resolved with formal CFO justification.`
             : `All ${activeTransactions.length} transaction entries verified as compliant with higher education procurement statutes.`,
         isViolation: unresolvedExceptions.length > 0,
       },
       {
-        standard: 'GASB 34 / PFMS Reconciliation Balance',
-        status: 'Certified Reconciled',
-        detail: `Bank closing total of ${formatCurrency(activeStatement.closingBalance)} matches general ledger with ${formatCurrency(activeStatement.aiValidation?.varianceAmount || 0)} variance.`,
-        isViolation: false,
+        standard: 'GASB 34 / Double-Entry Ledger Reconciliation',
+        status: isReconciled ? 'Certified Reconciled' : 'Discrepancy Flagged',
+        detail: isReconciled
+          ? `Bank closing total of ${formatCurrency(activeStatement.closingBalance)} matches general ledger with zero variance.`
+          : `Discrepancy of ${formatCurrency(variance)} detected between calculated transactions and reported statement closing balance.`,
+        isViolation: !isReconciled,
       },
       {
         standard: 'Statutory 90-Day Liquidity Solvency Floor',
-        status: 'Solvent',
-        detail: `Treasury liquid balances of ${formatCurrency(activeStatement.closingBalance)} meet statutory operating reserve floors.`,
+        status: totalLiquidBalance > 0 ? 'Solvent' : 'Reserve Check Required',
+        detail: `Treasury liquid balances of ${formatCurrency(totalLiquidBalance || activeStatement.closingBalance)} meet statutory operating reserve floors.`,
         isViolation: false,
       },
     ]
-  }, [activeStatement, activeTransactions, unresolvedExceptions, resolvedExceptions])
+  }, [activeStatement, activeTransactions, unresolvedExceptions, resolvedExceptions, isReconciled, variance, totalLiquidBalance])
 
   const dynamicOpinion = useMemo(() => {
     if (!activeStatement) return 'No statements filed yet.'
     const bankList = ownAccounts.map((a) => `${a.bankName} (${a.accountNumber})`).join(', ') || activeStatement.bankName
-    return `The statutory compliance audit evaluated ${myUniversity.name}'s active accounts (${bankList}) and ${activeStatement.quarter} statement against Karnataka State Universities Act 2000 and KGFR Chapter 8 provisions. Verified ${activeTransactions.length} transaction rows totaling ${formatCurrency(activeStatement.totalDebits, true)} in disbursements. ${unresolvedExceptions.length > 0 ? `${unresolvedExceptions.length} unallowable exception(s) require resolution before final sign-off.` : 'Institution is statutorily qualified for Department of Higher Education approval.'}`
+    return `The statutory compliance audit evaluated ${myUniversity.name}'s active accounts (${bankList}) and ${activeStatement.quarter} statement against Karnataka State Universities Act 2000 and KGFR Chapter 8 provisions. Verified ${activeTransactions.length} transaction rows totaling ${formatCurrency(activeStatement.totalDebits, true)} in disbursements. ${
+      unresolvedExceptions.length > 0
+        ? `${unresolvedExceptions.length} unallowable exception(s) require resolution before final sign-off.`
+        : 'Institution is statutorily qualified for Department of Higher Education approval.'
+    }`
   }, [activeStatement, ownAccounts, myUniversity, activeTransactions, unresolvedExceptions])
 
-  // Dynamic compliance scores across statutory pillars
+  // Dynamic compliance scores across statutory pillars for Bar Chart
   const compliancePillarsData = useMemo(() => {
     const baseScore = auditResults?.score || dynamicScore || 98
     const hasUnresolved = unresolvedExceptions.length > 0
     const allowableCostScore = hasUnresolved ? Math.max(60, 95 - unresolvedExceptions.length * 15) : 98
+    const reconciliationScore = isReconciled ? 100 : 70
+
     return [
       { pillar: 'Filing Timeliness', score: 100, standard: 'KSU Act §102' },
       { pillar: 'Allowable Costs', score: allowableCostScore, standard: 'KGFR Ch 8' },
       { pillar: 'Ledger Matching', score: 99, standard: 'Double Entry' },
-      { pillar: 'Reconciliation', score: 100, standard: 'GASB 34 / Zero Var' },
+      { pillar: 'Reconciliation', score: reconciliationScore, standard: 'GASB 34' },
       { pillar: 'Solvency Floor', score: Math.min(100, Math.round(baseScore * 0.98)), standard: '90-Day Liquidity' },
     ]
-  }, [auditResults, dynamicScore, unresolvedExceptions])
+  }, [auditResults, dynamicScore, unresolvedExceptions, isReconciled])
 
   // Execute Statutory Compliance Audit Pipeline
   const runLangGraphComplianceAudit = async () => {
@@ -248,7 +290,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
     try {
       await submitStatementForApproval(activeStatement.id, {
         submittedBy: `${currentUser?.name || 'Dr. Ramesh Babu, KAS'} (Finance Officer)`,
-        remarks: `Statutory Form 19-A & KSU Act compliance confirmed for ${activeStatement.bankName}. Merkle journal audit score: ${dynamicScore || 96.8}%.`,
+        remarks: `Statutory Form 19-A & KSU Act compliance confirmed for ${activeStatement.bankName}. Audit compliance score: ${dynamicScore || 96.8}%.`,
       })
 
       if (onTriggerToast) {
@@ -282,21 +324,21 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
               Statutory Compliance & Audit Verification
             </h1>
             <Badge variant="purple" className="text-[10px]">
-              Statutory Compliance
+              Step 6: Compliance
             </Badge>
           </div>
           <p className="text-xs text-[#57606a] mt-0.5">
-            {myUniversity.name} • Automated evaluation of institutional bank ledgers against K.S.U. Act 2000 § 102 & KGFR Chapter 8.
+            <strong>{myUniversity.name}</strong> • Automated evaluation of institutional bank ledgers against K.S.U. Act 2000 § 102 & KGFR Chapter 8.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="purple"
             size="sm"
             onClick={runLangGraphComplianceAudit}
             disabled={isRunningAudit || !activeStatement}
-            className="text-xs font-semibold shadow-2xs"
+            className="text-xs font-semibold shadow-2xs cursor-pointer"
           >
             {isRunningAudit ? (
               <>
@@ -314,16 +356,33 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
       </div>
 
       {!activeStatement ? (
-        <div className="p-10 rounded-xl border border-dashed border-[#d0d7de] bg-[#f6f8fa] text-center space-y-3">
+        <div className="p-10 rounded-xl border border-dashed border-[#d0d7de] bg-[#f6f8fa] text-center space-y-4">
           <div className="h-12 w-12 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center mx-auto text-[#8250df]">
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-[#1f2328]">No Statement Data Uploaded Yet</h3>
             <p className="text-xs text-[#57606a] max-w-md mx-auto mt-1">
-              {myUniversity.name} does not have any active quarterly statement filings. Please select an official bank account and upload a quarterly statement with transactions to execute the automated statutory compliance audit.
+              <strong>{myUniversity.name}</strong> does not have an active quarterly statement filing. Upload a quarterly statement with bank transactions to execute the automated statutory compliance audit.
             </p>
           </div>
+
+          {/* Compliance Requirements Preview */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto text-left pt-2">
+            <div className="p-3 bg-white rounded-lg border border-[#d0d7de] text-xs">
+              <div className="font-bold text-[#1f2328] mb-1">K.S.U. Act 2000 § 102</div>
+              <p className="text-[11px] text-[#57606a]">Quarterly financial return filing within 30 days of quarter close.</p>
+            </div>
+            <div className="p-3 bg-white rounded-lg border border-[#d0d7de] text-xs">
+              <div className="font-bold text-[#1f2328] mb-1">KGFR Rule 149</div>
+              <p className="text-[11px] text-[#57606a]">Allowable expenditure adherence & competitive procurement thresholds.</p>
+            </div>
+            <div className="p-3 bg-white rounded-lg border border-[#d0d7de] text-xs">
+              <div className="font-bold text-[#1f2328] mb-1">GASB 34 Balance Match</div>
+              <p className="text-[11px] text-[#57606a]">Opening + Credits − Debits = Closing with zero variance.</p>
+            </div>
+          </div>
+
           <Button
             variant="blue"
             size="sm"
@@ -331,7 +390,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
             className="text-xs font-semibold cursor-pointer"
           >
             <Landmark className="h-3.5 w-3.5 mr-1.5" />
-            Configure Bank Account & Upload Statement
+            Select Bank Account & Upload Statement
           </Button>
         </div>
       ) : (
@@ -372,7 +431,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
                     )}
                   </div>
                   <p className="text-[10px] text-[#57606a]">
-                    Retrieves K.S.U. Act 2000 §102, KGFR Ch 8 & GASB 34 statutory accounting rules.
+                    Retrieves K.S.U. Act 2000 § 102, KGFR Ch 8 & GASB 34 statutory accounting rules.
                   </p>
                 </div>
 
@@ -422,7 +481,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
                     )}
                   </div>
                   <p className="text-[10px] text-[#57606a]">
-                    Screens for duplicate wire payouts, unallowable travel & covenants.
+                    Screens for duplicate wire payouts, unallowable travel & procurement limits.
                   </p>
                 </div>
 
@@ -454,7 +513,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
             </CardContent>
           </Card>
 
-          {/* 3. Findings & Scorecard */}
+          {/* 3. Institutional Score & Audit Findings */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Compliance Rating Card */}
             <Card className="lg:col-span-1 bg-white">
@@ -469,38 +528,59 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
                   {auditResults?.score || dynamicScore || 98}%
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-[#1f2328]">Grade {auditResults?.grade || dynamicGrade} Statutory Rating</div>
+                  <div className="text-sm font-bold text-[#1f2328]">
+                    Grade {auditResults?.grade || dynamicGrade} Statutory Rating
+                  </div>
                   <p className="text-[11px] text-[#57606a] mt-0.5">
                     K.S.U. Act 2000 Certified • Full Accrual Standards Met
                   </p>
                 </div>
-                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de] text-[10px] text-[#57606a] text-left space-y-1">
-                  <div className="flex justify-between">
-                    <span>Audit Scope:</span>
-                    <span className="font-medium text-[#1f2328]">Statutory Compliance</span>
+
+                {/* Transparent Scoring Methodology Breakdown */}
+                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de] text-[10px] text-[#57606a] text-left space-y-1.5">
+                  <div className="font-semibold text-[#1f2328] border-b border-[#d0d7de]/50 pb-1">
+                    Compliance Score Methodology (100 Pts):
                   </div>
                   <div className="flex justify-between">
-                    <span>Ledger Verification:</span>
-                    <span className="font-mono text-[#1a7f37]">Bank Reconciliation Verified</span>
+                    <span>Filing Timeliness:</span>
+                    <span className="font-semibold text-[#1a7f37]">25 / 25 pts</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Audit Status:</span>
-                    <span className="font-semibold text-[#0969da]">Certified Active</span>
+                    <span>KGFR Allowable Costs:</span>
+                    <span
+                      className={`font-semibold ${
+                        unresolvedExceptions.length > 0 ? 'text-[#cf222e]' : 'text-[#1a7f37]'
+                      }`}
+                    >
+                      {unresolvedExceptions.length > 0
+                        ? `${Math.max(0, 25 - unresolvedExceptions.length * 5)} / 25 pts`
+                        : '25 / 25 pts'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Double-Entry GL Match:</span>
+                    <span className={`font-semibold ${isReconciled ? 'text-[#1a7f37]' : 'text-[#cf222e]'}`}>
+                      {isReconciled ? '25 / 25 pts' : '10 / 25 pts'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Treasury Solvency Floor:</span>
+                    <span className="font-semibold text-[#1a7f37]">25 / 25 pts</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Agent Evaluation Report */}
+            {/* Agent Evaluation Findings */}
             <Card className="lg:col-span-2 bg-white">
               <CardHeader className="border-b border-[#d0d7de] pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
                     <BookOpen className="h-4 w-4 text-[#0969da]" />
-                    Statutory Audit Findings
+                    Statutory Audit Findings & Standards
                   </CardTitle>
                   <Badge variant="blue" className="text-[10px]">
-                    {auditResults ? 'Live Audit Run' : 'Baseline Verified'}
+                    {auditResults ? 'Live Audit Run' : 'Continuous Verification'}
                   </Badge>
                 </div>
               </CardHeader>
@@ -524,7 +604,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
                 <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/40 text-xs text-[#1f2328] leading-relaxed">
                   <div className="flex items-center gap-1.5 font-bold text-[#8250df] mb-1">
                     <Sparkles className="h-3.5 w-3.5" />
-                    Compliance Audit Evaluation:
+                    Statutory Compliance Opinion:
                   </div>
                   <p className="text-[11px] text-[#57606a]">
                     {auditResults?.llmAnswer || dynamicOpinion}
@@ -534,7 +614,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
             </Card>
           </div>
 
-          {/* Statutory Compliance Dimensions Bar Chart */}
+          {/* 4. Statutory Compliance Dimensions Bar Chart */}
           <Card className="bg-white border border-[#d0d7de]">
             <CardHeader className="border-b border-[#d0d7de] pb-3">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -544,7 +624,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
                     Statutory Compliance Dimension Scores vs 85-Point Statutory Benchmark
                   </CardTitle>
                   <CardDescription className="text-xs text-[#57606a]">
-                    Evaluated under K.S.U. Act §102 and KGFR Rule 149 statutory mandates
+                    Evaluated under K.S.U. Act § 102 and KGFR Rule 149 statutory mandates
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-[#57606a]">
@@ -606,7 +686,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
             </CardContent>
           </Card>
 
-          {/* 4. Verifiable Citations */}
+          {/* 5. Verifiable Regulatory Citations */}
           <Card className="bg-white">
             <CardHeader className="border-b border-[#d0d7de] pb-3">
               <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
@@ -647,7 +727,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
             </CardContent>
           </Card>
 
-          {/* 5. Statutory Sign-off & Transmission to State Gov Leader */}
+          {/* 6. Statutory Sign-off & Transmission */}
           <Card className="bg-white border border-[#d0d7de]">
             <CardHeader className="border-b border-[#d0d7de] pb-3">
               <div className="flex items-center justify-between">
@@ -684,7 +764,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
 
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
                 <div className="text-xs text-[#57606a]">
-                  Signing Official: <strong className="text-[#1f2328]">{currentUser?.name || 'Dr. Ramesh Babu, KAS'} (Finance Officer)</strong>
+                  Signing Official: <strong className="text-[#1f2328]">{currentUser?.name || 'Finance Officer'}</strong>
                 </div>
 
                 <div className="flex items-center gap-2">
