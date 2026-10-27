@@ -129,6 +129,12 @@ export function Sidebar({
             icon: FileSpreadsheet,
             description: 'Statutory legislative reports & filings',
           },
+          {
+            id: 'settings',
+            label: 'Settings',
+            icon: Settings,
+            description: 'Registry settings: update & delete university details',
+          },
         ]
       case ROLES.UNIV_FINANCE:
       case ROLES.UNIV_ADMIN:

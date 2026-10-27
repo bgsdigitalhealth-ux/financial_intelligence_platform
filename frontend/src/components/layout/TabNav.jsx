@@ -15,6 +15,7 @@ import {
   Network,
   GitCommit,
   Cpu,
+  Settings,
 } from 'lucide-react'
 import { ROLES, useFinancialData } from '@/context/FinancialDataContext'
 
@@ -37,7 +38,8 @@ export function TabNav({ currentRole, activeTab, onSelectTab }) {
       case ROLES.GOV_LEADER:
         return [
           { id: 'overview', label: 'Executive Overview', icon: LayoutDashboard },
-          { id: 'grants', label: 'University Grants & Allocations', icon: IndianRupee, badge: `${universities.length}` },
+          { id: 'all_colleges', label: 'Universities', icon: Building2, badge: `${universities.length}` },
+          { id: 'grants', label: 'University Grants & Allocations', icon: IndianRupee },
           {
             id: 'compliance',
             label: 'Compliance & Risk Map',
@@ -47,6 +49,7 @@ export function TabNav({ currentRole, activeTab, onSelectTab }) {
           },
           { id: 'simulator', label: 'Policy Budget Simulator', icon: Sliders },
           { id: 'reports', label: 'Legislative Reports', icon: FileSpreadsheet },
+          { id: 'settings', label: 'Settings', icon: Settings },
         ]
       case ROLES.UNIV_FINANCE:
         return [

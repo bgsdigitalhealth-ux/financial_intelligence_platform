@@ -134,9 +134,10 @@ export function GovSettingsView({ onSelectTab, onTriggerToast }) {
 
   // Handle Edit Open
   const handleOpenEdit = (college) => {
+    const rawAlloc = college.allocatedAmount ?? college.allocation ?? 0
     setEditingCollege({
       ...college,
-      allocatedAmount: college.allocatedAmount ? String(college.allocatedAmount) : '0',
+      allocatedAmount: rawAlloc ? String(rawAlloc) : '0',
     })
     setIsEditModalOpen(true)
   }
@@ -159,6 +160,8 @@ export function GovSettingsView({ onSelectTab, onTriggerToast }) {
       return
     }
 
+    const allocVal = Number(editingCollege.allocatedAmount) || 0
+
     setIsSubmittingEdit(true)
     try {
       await updateUniversity(editingCollege.id, {
@@ -171,7 +174,8 @@ export function GovSettingsView({ onSelectTab, onTriggerToast }) {
         district: editingCollege.district,
         address: editingCollege.address,
         affiliatedUniversity: editingCollege.affiliatedUniversity,
-        allocatedAmount: Number(editingCollege.allocatedAmount) || 0,
+        allocation: allocVal,
+        allocatedAmount: allocVal,
         status: editingCollege.status || 'Optimal',
       })
 
