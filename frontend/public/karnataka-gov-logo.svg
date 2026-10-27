@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%">
+  <defs>
+    <radialGradient id="kgShieldGrad" cx="50%" cy="45%" r="50%">
+      <stop offset="0%" stop-color="#b91c1c"/>
+      <stop offset="70%" stop-color="#7f1d1d"/>
+      <stop offset="100%" stop-color="#450a0a"/>
+    </radialGradient>
+    <linearGradient id="kgGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="35%" stop-color="#facc15"/>
+      <stop offset="70%" stop-color="#ca8a04"/>
+      <stop offset="100%" stop-color="#854d0e"/>
+    </linearGradient>
+    <linearGradient id="kgAshokaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef9c3"/>
+      <stop offset="50%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#a16207"/>
+    </linearGradient>
+    <filter id="kgShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Ring -->
+  <circle cx="100" cy="100" r="96" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="2"/>
+  <circle cx="100" cy="100" r="90" fill="url(#kgShieldGrad)" stroke="url(#kgGoldGrad)" stroke-width="2.5"/>
+  <circle cx="100" cy="100" r="82" fill="none" stroke="url(#kgGoldGrad)" stroke-width="1.2" stroke-dasharray="3,2"/>
+
+  <!-- Ashoka Lion Capital (Top Crest) -->
+  <g id="ashoka-capital" transform="translate(100, 28) scale(0.68)" filter="url(#kgShadow)">
+    <!-- Base Abacus -->
+    <rect x="-32" y="8" width="64" height="6" rx="2" fill="url(#kgAshokaGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Dharma Chakra in center of abacus -->
+    <circle cx="0" cy="11" r="2.8" fill="#1e3a8a" stroke="#facc15" stroke-width="0.6"/>
+    <!-- Lions Crest -->
+    <!-- Center Lion -->
+    <path d="M-8,-8 C-8,-16 8,-16 8,-8 C10,-4 8,8 4,8 L-4,8 C-8,8 -10,-4 -8,-8 Z" fill="url(#kgAshokaGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Mane & details -->
+    <path d="M-6,-12 C-3,-14 3,-14 6,-12 C7,-9 6,-5 4,-5 C2,-5 1,-7 0,-7 C-1,-7 -2,-5 -4,-5 C-6,-5 -7,-9 -6,-12 Z" fill="#fef08a"/>
+    <circle cx="-2" cy="-8" r="0.9" fill="#450a0a"/>
+    <circle cx="2" cy="-8" r="0.9" fill="#450a0a"/>
+    <!-- Left Lion (profile) -->
+    <path d="M-9,-6 C-15,-10 -22,-5 -20,2 C-19,6 -14,8 -8,8 Z" fill="url(#kgAshokaGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Right Lion (profile) -->
+    <path d="M9,-6 C15,-10 22,-5 20,2 C19,6 14,8 8,8 Z" fill="url(#kgAshokaGrad)" stroke="#78350f" stroke-width="0.8"/>
+  </g>
+
+  <!-- Left Sharabha (Mythical Winged Lion) -->
+  <g id="left-sharabha" transform="translate(38, 105) scale(0.65)" filter="url(#kgShadow)">
+    <!-- Body -->
+    <path d="M18,12 C14,-5 2,-18 -12,-15 C-22,-12 -28,-2 -25,12 C-22,25 -14,38 -2,42 C8,45 15,36 17,28 C18,22 20,18 18,12 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="1.2"/>
+    <!-- Raised Foreleg -->
+    <path d="M5,-2 C-2,-14 -10,-24 -6,-32 C-3,-36 5,-32 8,-24 C10,-18 12,-10 14,-2 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="1"/>
+    <!-- Trunk / Elephantine head -->
+    <path d="M-18,-15 C-26,-22 -35,-18 -32,-8 C-30,-2 -25,-6 -20,-8 Z" fill="url(#kgGoldGrad)"/>
+    <!-- Wings -->
+    <path d="M12,5 C25,-12 38,-8 35,8 C32,20 18,22 12,18 Z" fill="#fef08a" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Eye & detail -->
+    <circle cx="-16" cy="-12" r="1.5" fill="#450a0a"/>
+  </g>
+
+  <!-- Right Sharabha (Mythical Winged Lion) -->
+  <g id="right-sharabha" transform="translate(162, 105) scale(-0.65, 0.65)" filter="url(#kgShadow)">
+    <!-- Body -->
+    <path d="M18,12 C14,-5 2,-18 -12,-15 C-22,-12 -28,-2 -25,12 C-22,25 -14,38 -2,42 C8,45 15,36 17,28 C18,22 20,18 18,12 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="1.2"/>
+    <!-- Raised Foreleg -->
+    <path d="M5,-2 C-2,-14 -10,-24 -6,-32 C-3,-36 5,-32 8,-24 C10,-18 12,-10 14,-2 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="1"/>
+    <!-- Trunk / Elephantine head -->
+    <path d="M-18,-15 C-26,-22 -35,-18 -32,-8 C-30,-2 -25,-6 -20,-8 Z" fill="url(#kgGoldGrad)"/>
+    <!-- Wings -->
+    <path d="M12,5 C25,-12 38,-8 35,8 C32,20 18,22 12,18 Z" fill="#fef08a" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Eye & detail -->
+    <circle cx="-16" cy="-12" r="1.5" fill="#450a0a"/>
+  </g>
+
+  <!-- Central Shield (Red / Maroon with Gold Border) -->
+  <path d="M72,62 L128,62 C132,62 135,66 134,70 C130,98 122,126 100,146 C78,126 70,98 66,70 C65,66 68,62 72,62 Z" fill="url(#kgShieldGrad)" stroke="url(#kgGoldGrad)" stroke-width="2.5" filter="url(#kgShadow)"/>
+  <!-- Shield Inner Border -->
+  <path d="M76,66 L124,66 C126,66 128,69 128,72 C124,96 117,120 100,138 C83,120 76,96 72,72 C72,69 74,66 76,66 Z" fill="none" stroke="url(#kgGoldGrad)" stroke-width="0.8"/>
+
+  <!-- Gandaberunda (Two-Headed Sacred Bird of Karnataka) in Center -->
+  <g id="gandaberunda" transform="translate(100, 100) scale(0.95)" filter="url(#kgShadow)">
+    <!-- Central Torso -->
+    <ellipse cx="0" cy="5" rx="10" ry="15" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="1"/>
+    <!-- Left Wing (Spread Outwards) -->
+    <path d="M-6,2 C-18,-4 -28,-14 -32,-26 C-24,-16 -16,-8 -4,0 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <path d="M-8,6 C-20,4 -30,-4 -34,-14 C-26,-4 -18,2 -6,5 Z" fill="#fef08a" stroke="#78350f" stroke-width="0.7"/>
+    <path d="M-8,12 C-22,14 -28,6 -32,-2 C-24,4 -16,8 -6,10 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.7"/>
+    <!-- Right Wing (Spread Outwards) -->
+    <path d="M6,2 C18,-4 28,-14 32,-26 C24,-16 16,-8 4,0 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <path d="M8,6 C20,4 30,-4 34,-14 C26,-4 18,2 6,5 Z" fill="#fef08a" stroke="#78350f" stroke-width="0.7"/>
+    <path d="M8,12 C22,14 28,6 32,-2 C24,4 16,8 6,10 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.7"/>
+    <!-- Left Neck & Head -->
+    <path d="M-4,-4 C-6,-12 -12,-18 -16,-22 C-13,-24 -8,-22 -5,-16 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Left Beak -->
+    <path d="M-16,-22 C-22,-22 -24,-19 -20,-17 C-17,-18 -15,-20 -16,-22 Z" fill="#fef08a" stroke="#78350f" stroke-width="0.6"/>
+    <!-- Right Neck & Head -->
+    <path d="M4,-4 C6,-12 12,-18 16,-22 C13,-24 8,-22 5,-16 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Right Beak -->
+    <path d="M16,-22 C22,-22 24,-19 20,-17 C17,-18 15,-20 16,-22 Z" fill="#fef08a" stroke="#78350f" stroke-width="0.6"/>
+    <!-- Tail Feathers -->
+    <path d="M-6,18 C-10,26 -4,32 0,33 C4,32 10,26 6,18 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="0.8"/>
+    <!-- Crown on each head -->
+    <polygon points="-16,-26 -14,-23 -18,-23" fill="#fef08a"/>
+    <polygon points="16,-26 14,-23 18,-23" fill="#fef08a"/>
+  </g>
+
+  <!-- Bottom Banner: KARNATAKA GOVT -->
+  <g transform="translate(100, 168)">
+    <!-- Scroll Ribbon -->
+    <path d="M-72,2 C-45,-4 45,-4 72,2 C65,14 55,16 0,15 C-55,16 -65,14 -72,2 Z" fill="url(#kgGoldGrad)" stroke="#78350f" stroke-width="1.2" filter="url(#kgShadow)"/>
+    <text x="0" y="10" text-anchor="middle" font-family="'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="7.5" fill="#78350f" letter-spacing="1.2">
+      ಕರ್ನಾಟಕ ಸರ್ಕಾರ
+    </text>
+  </g>
+</svg>
