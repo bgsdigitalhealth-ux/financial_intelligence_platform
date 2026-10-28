@@ -90,27 +90,41 @@ class MySQLDatabase {
                ai_summary AS aiSummary, submitted_at AS submittedAt,
                submission_remarks AS submissionRemarks,
                approved_at AS approvedAt, reviewed_by AS reviewedBy,
-               review_notes AS reviewNotes
+               review_notes AS reviewNotes,
+               raw_transactions AS rawTransactions
         FROM statements
         ORDER BY created_at DESC
       `)
 
-      const [txRows] = await pool.query(`
-        SELECT id, statement_id AS statementId, account_id AS accountId,
-               DATE_FORMAT(transaction_date, '%Y-%m-%d') AS date,
-               reference_no AS referenceNo, description, type,
-               CAST(amount AS DOUBLE) AS amount,
-               CAST(balance AS DOUBLE) AS balance,
-               category, CAST(ai_confidence AS FLOAT) AS aiConfidence,
-               status, flag, allowable, resolved,
-               resolution_action AS resolutionAction,
-               resolution_note AS resolutionNote
-        FROM transactions
-      `)
+      let txRows = []
+      try {
+        const [rows] = await pool.query(`
+          SELECT id, statement_id AS statementId, account_id AS accountId,
+                 DATE_FORMAT(transaction_date, '%Y-%m-%d') AS date,
+                 reference_no AS referenceNo, description, type,
+                 CAST(amount AS DOUBLE) AS amount,
+                 CAST(balance AS DOUBLE) AS balance,
+                 category, CAST(ai_confidence AS FLOAT) AS aiConfidence,
+                 status, flag, allowable, resolved,
+                 resolution_action AS resolutionAction,
+                 resolution_note AS resolutionNote
+          FROM transactions
+        `)
+        txRows = rows
+      } catch (txQueryErr) {
+        console.warn('[MySQL db.js] transactions query note, falling back to statement raw_transactions:', txQueryErr.message)
+      }
 
       // Attach transactions to statements
       this.cache.statements = stmtRows.map((stmt) => {
-        const txs = txRows.filter((t) => t.statementId === stmt.id)
+        let txs = txRows.filter((t) => t.statementId === stmt.id)
+        if (txs.length === 0 && stmt.rawTransactions) {
+          try {
+            txs = typeof stmt.rawTransactions === 'string' ? JSON.parse(stmt.rawTransactions) : stmt.rawTransactions
+          } catch (e) {
+            txs = []
+          }
+        }
         return {
           ...stmt,
           aiValidation: {
@@ -118,10 +132,10 @@ class MySQLDatabase {
             reconciliationMatch: Boolean(stmt.reconciliationMatch),
             varianceAmount: stmt.varianceAmount || 0,
             summary: stmt.aiSummary || '',
-            totalTransactions: txs.length,
-            exceptionsCount: txs.filter((t) => t.status === 'Exception' && !t.resolved).length,
+            totalTransactions: Array.isArray(txs) ? txs.length : 0,
+            exceptionsCount: Array.isArray(txs) ? txs.filter((t) => t.status === 'Exception' && !t.resolved).length : 0,
           },
-          transactions: txs,
+          transactions: Array.isArray(txs) ? txs : [],
         }
       })
 
@@ -202,7 +216,8 @@ class MySQLDatabase {
   }
 
   getUniversityById(id) {
-    return this.cache.universities.find((u) => u.id === id)
+    if (!id) return null
+    return this.cache.universities.find((u) => u.id === id || (u.code && u.code.toUpperCase() === String(id).toUpperCase()))
   }
 
   async createUniversity(univ) {
@@ -457,7 +472,8 @@ class MySQLDatabase {
   }
 
   getBankAccountById(id) {
-    const acct = this.cache.bankAccounts.find((a) => a.id === id)
+    if (!id) return null
+    const acct = this.cache.bankAccounts.find((a) => a.id === id || a.accountNumber === id)
     if (!acct) return null
     return {
       ...acct,
@@ -646,9 +662,9 @@ class MySQLDatabase {
     try {
       const pool = await mysqlConfig.getPool()
       await pool.query(
-        `INSERT INTO statements (id, university_id, university_name, account_id, account_number, account_name, bank_name, quarter, financial_year, file_name, file_size, uploaded_at, uploaded_by, total_debits, total_credits, opening_balance, closing_balance, status, ai_confidence, reconciliation_match, variance_amount, ai_summary)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE status=VALUES(status);`,
+        `INSERT INTO statements (id, university_id, university_name, account_id, account_number, account_name, bank_name, quarter, financial_year, file_name, file_size, uploaded_at, uploaded_by, total_debits, total_credits, opening_balance, closing_balance, status, ai_confidence, reconciliation_match, variance_amount, ai_summary, raw_transactions)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE status=VALUES(status), closing_balance=VALUES(closing_balance), total_debits=VALUES(total_debits), total_credits=VALUES(total_credits), raw_transactions=VALUES(raw_transactions);`,
         [
           stmt.id, stmt.universityId, stmt.universityName, stmt.accountId, stmt.accountNumber,
           stmt.accountName, stmt.bankName, stmt.quarter, stmt.financialYear || '2025-2026',
@@ -656,7 +672,8 @@ class MySQLDatabase {
           stmt.totalDebits, stmt.totalCredits, stmt.openingBalance, stmt.closingBalance,
           stmt.status, stmt.aiValidation?.confidenceScore || 98.2,
           stmt.aiValidation?.reconciliationMatch ? 1 : 0, stmt.aiValidation?.varianceAmount || 0,
-          stmt.aiValidation?.summary || ''
+          stmt.aiValidation?.summary || '',
+          JSON.stringify(stmt.transactions || [])
         ]
       )
 
@@ -679,18 +696,22 @@ class MySQLDatabase {
             }
           }
 
-          await pool.query(
-            `INSERT INTO transactions (id, statement_id, account_id, transaction_date, reference_no, description, type, amount, balance, category, ai_confidence, status, flag, allowable, resolved, resolution_action, resolution_note)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE status=VALUES(status);`,
-            [
-              txId, stmt.id, stmt.accountId, validDate, tx.referenceNo || `REF-${idx + 1}`,
-              tx.description || 'Transaction', tx.type || 'DEBIT', Number(tx.amount) || 0, Number(tx.balance) || 0, tx.category || 'Institutional Operating',
-              tx.aiConfidence || 95.0, tx.status || 'Validated', tx.flag || null,
-              tx.allowable ? 1 : 0, tx.resolved ? 1 : 0, tx.resolutionAction || null,
-              tx.resolutionNote || null
-            ]
-          )
+          try {
+            await pool.query(
+              `INSERT INTO transactions (id, statement_id, account_id, transaction_date, reference_no, description, type, amount, balance, category, ai_confidence, status, flag, allowable, resolved, resolution_action, resolution_note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON DUPLICATE KEY UPDATE status=VALUES(status);`,
+              [
+                txId, stmt.id, stmt.accountId, validDate, tx.referenceNo || `REF-${idx + 1}`,
+                tx.description || 'Transaction', tx.type || 'DEBIT', Number(tx.amount) || 0, Number(tx.balance) || 0, tx.category || 'Institutional Operating',
+                tx.aiConfidence || 95.0, tx.status || 'Validated', tx.flag || null,
+                tx.allowable ? 1 : 0, tx.resolved ? 1 : 0, tx.resolutionAction || null,
+                tx.resolutionNote || null
+              ]
+            )
+          } catch (txErr) {
+            console.warn('[MySQL Warning] Transaction line save note:', txErr.message)
+          }
         }
       }
 
@@ -800,6 +821,12 @@ class MySQLDatabase {
 
   async deleteStatement(id) {
     this.cache.statements = this.cache.statements.filter((s) => s.id !== id)
+    try {
+      const ragEngine = require('../rag/engine')
+      ragEngine.removeStatement(id)
+    } catch (ragErr) {
+      // Ignore if circular or not initialized
+    }
     try {
       const pool = await mysqlConfig.getPool()
       await pool.query('DELETE FROM transactions WHERE statement_id = ?', [id])

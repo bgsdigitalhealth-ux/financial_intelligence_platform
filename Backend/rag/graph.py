@@ -54,14 +54,16 @@ def analyze_query_node(state: RAGState) -> Dict[str, Any]:
     # Detect Topic Intent
     if any(k in query_lower for k in ['unallowable', 'luxury', 'hospitality', 'exception', 'violation', 'flag']):
         intent = 'compliance_exception'
-    elif any(k in query_lower for k in ['bank', 'account', 'balance', 'ifsc', 'canara', 'sbi', 'baroda', 'cash']):
+    elif any(k in query_lower for k in ['bank', 'account', 'balance', 'ifsc', 'canara', 'sbi', 'baroda', 'cash', 'credit', 'debit', 'statement', 'transaction', 'ref', 'ledger']):
         intent = 'banking_liquidity'
     elif any(k in query_lower for k in ['act', 'statutory', 'section 47', 'section 48', 'cag', 'rule', 'policy']):
         intent = 'statutory_policy'
-    elif any(k in query_lower for k in ['budget', 'allocation', 'spent', 'utilization', 'reserve']):
+    elif any(k in query_lower for k in ['budget', 'allocation', 'spent', 'utilization', 'reserve', 'grant']):
         intent = 'budget_appropriation'
-    else:
+    elif any(k in query_lower for k in ['college', 'university', 'institution', 'mysore', 'vtu', 'bangalore', 'bgs', 'audit', 'financial', 'inflow', 'outflow', 'opening', 'closing']):
         intent = 'general_financial'
+    else:
+        intent = 'unrelated_random'
 
     return {
         "intent": intent,
@@ -192,6 +194,13 @@ def query_sql_data_node(state: RAGState) -> Dict[str, Any]:
 # --- Node 4: LLM Generation via Ollama ---
 def llm_generate_node(state: RAGState) -> Dict[str, Any]:
     query = state['query']
+    if state.get('intent') == 'unrelated_random':
+        return {
+            "llm_response": "I don't have information.",
+            "ollama_status": {"connected": False},
+            "latency_ms": 15.0
+        }
+
     model = state.get('model') or config.OLLAMA_MODEL
     ollama_url = state.get('ollama_base_url') or config.OLLAMA_BASE_URL
     vector_context = state.get('vector_context', [])

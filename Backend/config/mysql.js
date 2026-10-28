@@ -140,6 +140,32 @@ async function initMySQL(seedData) {
     `)
 
     await conn.query(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id VARCHAR(64) PRIMARY KEY,
+        statement_id VARCHAR(64) NOT NULL,
+        account_id VARCHAR(64) NOT NULL,
+        transaction_date DATE NOT NULL,
+        reference_no VARCHAR(64) NOT NULL,
+        description TEXT NOT NULL,
+        type VARCHAR(32) NOT NULL DEFAULT 'DEBIT',
+        amount BIGINT NOT NULL DEFAULT 0,
+        balance BIGINT NOT NULL DEFAULT 0,
+        category VARCHAR(128) NOT NULL,
+        ai_confidence DECIMAL(5,2) NOT NULL DEFAULT 95.0,
+        status VARCHAR(64) NOT NULL DEFAULT 'Validated',
+        flag TEXT NULL,
+        allowable BOOLEAN NOT NULL DEFAULT TRUE,
+        resolved BOOLEAN NOT NULL DEFAULT FALSE,
+        resolution_action VARCHAR(128) NULL,
+        resolution_note TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_tx_statement (statement_id),
+        INDEX idx_tx_status (status),
+        INDEX idx_tx_category (category)
+      ) ENGINE=InnoDB;
+    `)
+
+    await conn.query(`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id VARCHAR(64) PRIMARY KEY,
         hash VARCHAR(16) NOT NULL,
@@ -163,6 +189,8 @@ async function initMySQL(seedData) {
       await conn.query(`ALTER TABLE universities MODIFY COLUMN statement_status VARCHAR(64) NOT NULL DEFAULT 'Pending Upload';`)
       await conn.query(`ALTER TABLE universities MODIFY COLUMN code VARCHAR(64) NOT NULL;`)
       await conn.query(`ALTER TABLE users MODIFY COLUMN status VARCHAR(64) NOT NULL DEFAULT 'Active';`)
+      await conn.query(`ALTER TABLE statements ADD COLUMN IF NOT EXISTS raw_transactions JSON NULL;`)
+      await conn.query(`ALTER TABLE statements MODIFY COLUMN status VARCHAR(64) NOT NULL DEFAULT 'AI Validated';`)
     } catch {
       // Ignore if exists
     }

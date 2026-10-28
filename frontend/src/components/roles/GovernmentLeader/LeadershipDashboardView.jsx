@@ -1,24 +1,20 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import {
   Building2,
   Search,
   Plus,
   ArrowLeft,
-  FileSpreadsheet,
-  Mail,
-  MapPin,
   Landmark,
   FileText,
-  CheckCircle2,
-  AlertCircle,
-  Filter,
-  KeyRound,
   Copy,
   Check,
   ArrowRight,
   ShieldCheck,
-  Lock,
-  ExternalLink,
+  CreditCard,
+  MapPin,
+  Calendar,
+  FileSpreadsheet,
+  Trash2,
 } from 'lucide-react'
 import { useFinancialData } from '@/context/FinancialDataContext'
 import { Badge } from '@/components/ui/Badge'
@@ -33,22 +29,23 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     bankAccounts = [],
     selectedUniversityId,
     setSelectedUniversityId,
+    deleteUniversity,
+    deleteBankAccount,
   } = useFinancialData()
 
-  // State: selected college for full details view (null = card-wise list view)
-  const [selectedCollegeForView, setSelectedCollegeForView] = useState(() => {
-    if (selectedUniversityId) {
-      return universities.find((u) => u.id === selectedUniversityId) || null
-    }
-    return null
-  })
+  // State: selected college for bank details view (null = all colleges list view only)
+  const [selectedCollegeForView, setSelectedCollegeForView] = useState(null)
 
-  // Synchronize when selectedUniversityId is changed externally
-  React.useEffect(() => {
-    if (selectedUniversityId) {
-      const target = universities.find((u) => u.id === selectedUniversityId)
+  // Only synchronize when selectedUniversityId is changed explicitly after initial mount
+  const prevSelectedUnivIdRef = useRef(selectedUniversityId)
+  useEffect(() => {
+    if (selectedUniversityId && selectedUniversityId !== prevSelectedUnivIdRef.current) {
+      const target = universities.find(
+        (u) => u.id === selectedUniversityId || (u.code && u.code === selectedUniversityId)
+      )
       if (target) setSelectedCollegeForView(target)
     }
+    prevSelectedUnivIdRef.current = selectedUniversityId
   }, [selectedUniversityId, universities])
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -60,6 +57,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
   const [txCategoryFilter, setTxCategoryFilter] = useState('ALL')
 
   const handleCopy = (text, label) => {
+    if (!text) return
     navigator.clipboard.writeText(text)
     setCopiedText(text)
     setTimeout(() => setCopiedText(''), 2000)
@@ -68,7 +66,48 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     }
   }
 
-  // Filtered universities for the card-wise view
+  const handleDeleteCollege = async (college) => {
+    if (!college) return
+    if (!window.confirm(`Are you sure you want to delete "${college.name}" (${college.code})? This will permanently remove the college and its registered data.`)) {
+      return
+    }
+    try {
+      if (deleteUniversity) {
+        await deleteUniversity(college.id)
+      }
+      if (selectedCollegeForView?.id === college.id) {
+        setSelectedCollegeForView(null)
+      }
+      if (onTriggerToast) {
+        onTriggerToast('College Deleted', `${college.name} removed successfully.`, 'success')
+      }
+    } catch (err) {
+      if (onTriggerToast) {
+        onTriggerToast('Delete Failed', err.message || 'Could not delete college.', 'danger')
+      }
+    }
+  }
+
+  const handleDeleteAccount = async (account) => {
+    if (!account) return
+    if (!window.confirm(`Are you sure you want to delete bank account ${account.accountNumber} (${account.bankName})?`)) {
+      return
+    }
+    try {
+      if (deleteBankAccount) {
+        await deleteBankAccount(account.id)
+      }
+      if (onTriggerToast) {
+        onTriggerToast('Bank Account Deleted', `Removed ${account.bankName} (${account.accountNumber}).`, 'success')
+      }
+    } catch (err) {
+      if (onTriggerToast) {
+        onTriggerToast('Delete Failed', err.message || 'Could not delete bank account.', 'danger')
+      }
+    }
+  }
+
+  // Filtered universities for the list view
   const filteredUniversities = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
     if (!q) return universities
@@ -83,13 +122,16 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     )
   }, [universities, searchQuery])
 
-  // Computed data for the selected college
+  // Computed bank data for the selected college
   const selectedCollegeAccounts = useMemo(() => {
     if (!selectedCollegeForView) return []
     return bankAccounts.filter(
       (a) =>
         a.universityId === selectedCollegeForView.id ||
-        (a.universityName && selectedCollegeForView.name && a.universityName.toLowerCase() === selectedCollegeForView.name.toLowerCase())
+        (selectedCollegeForView.code && a.universityId === selectedCollegeForView.code) ||
+        (a.universityName &&
+          selectedCollegeForView.name &&
+          a.universityName.toLowerCase() === selectedCollegeForView.name.toLowerCase())
     )
   }, [bankAccounts, selectedCollegeForView])
 
@@ -97,13 +139,20 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     return selectedCollegeAccounts.map((a) => a.id)
   }, [selectedCollegeAccounts])
 
+  const totalBankBalance = useMemo(() => {
+    return selectedCollegeAccounts.reduce((sum, acc) => sum + (Number(acc.currentBalance) || 0), 0)
+  }, [selectedCollegeAccounts])
+
   const selectedCollegeStatements = useMemo(() => {
     if (!selectedCollegeForView) return []
     return statements.filter(
       (s) =>
         s.universityId === selectedCollegeForView.id ||
+        (selectedCollegeForView.code && s.universityId === selectedCollegeForView.code) ||
         selectedCollegeAccountIds.includes(s.accountId) ||
-        (s.universityName && selectedCollegeForView.name && s.universityName.toLowerCase().includes(selectedCollegeForView.name.toLowerCase()))
+        (s.universityName &&
+          selectedCollegeForView.name &&
+          s.universityName.toLowerCase() === selectedCollegeForView.name.toLowerCase())
     )
   }, [statements, selectedCollegeForView, selectedCollegeAccountIds])
 
@@ -142,15 +191,9 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
   }, [selectedCollegeTransactions])
 
   // =========================================================================
-  // VIEW 1: COLLEGE DETAILS & TRANSACTIONS (Opened when a card is clicked)
+  // VIEW 1: COLLEGE BANK DETAILS (Opened when a particular college is clicked)
   // =========================================================================
   if (selectedCollegeForView) {
-    const alloc = Number(selectedCollegeForView.allocation ?? selectedCollegeForView.allocatedAmount) || 0
-    const spent = Number(selectedCollegeForView.spent ?? selectedCollegeForView.spentAmount) || 0
-    const balance = Number(selectedCollegeForView.availableCash) || Math.max(0, alloc - spent)
-    const utilization = alloc > 0 ? Number(((spent / alloc) * 100).toFixed(1)) : 0
-    const compliance = Number(selectedCollegeForView.complianceScore) || 98
-
     return (
       <div className="space-y-6 pb-12">
         {/* Top Back Navigation Bar */}
@@ -179,6 +222,12 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
                 <Badge variant="outline" className="text-[10px]">
                   {selectedCollegeForView.institutionType || 'State Public University'}
                 </Badge>
+                {selectedCollegeForView.district && (
+                  <Badge variant="outline" className="text-[10px] text-[#57606a]">
+                    <MapPin className="h-3 w-3 mr-0.5" />
+                    {selectedCollegeForView.district}
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -196,47 +245,11 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
           </div>
         </div>
 
-        {/* 1. College Key Metrics (Accurate Real Numbers) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        {/* Bank Details Key Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
           <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
             <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              State Budget Allocation
-            </div>
-            <div className="text-lg font-bold text-[#1f2328] mt-1 font-mono truncate" title={formatCurrency(alloc)}>
-              {formatCurrency(alloc)}
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
-            <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Total Spent (Expenditure)
-            </div>
-            <div className="text-lg font-bold text-[#cf222e] mt-1 font-mono truncate" title={formatCurrency(spent)}>
-              {formatCurrency(spent)}
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
-            <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Remaining Balance
-            </div>
-            <div className="text-lg font-bold text-[#1a7f37] mt-1 font-mono truncate" title={formatCurrency(balance)}>
-              {formatCurrency(balance)}
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
-            <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Utilization Rate
-            </div>
-            <div className="text-lg font-bold text-[#0969da] mt-1 font-mono">
-              {utilization}%
-            </div>
-          </div>
-
-          <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
-            <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Total Accounts
+              Total Bank Accounts
             </div>
             <div className="text-lg font-bold text-[#1f2328] mt-1 font-mono">
               {selectedCollegeAccounts.length} Accounts
@@ -245,189 +258,297 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
 
           <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
             <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Total Transactions
+              Total Bank Balance
+            </div>
+            <div
+              className="text-lg font-bold text-[#1a7f37] mt-1 font-mono truncate"
+              title={formatCurrency(totalBankBalance)}
+            >
+              {formatCurrency(totalBankBalance)}
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
+            <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
+              Filed Bank Statements
+            </div>
+            <div className="text-lg font-bold text-[#0969da] mt-1 font-mono">
+              {selectedCollegeStatements.length} Statements
+            </div>
+          </div>
+
+          <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
+            <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
+              Total Transactions Filed
             </div>
             <div className="text-lg font-bold text-[#1f2328] mt-1 font-mono">
-              {selectedCollegeTransactions.length} Filed
+              {selectedCollegeTransactions.length} Recorded
             </div>
           </div>
         </div>
 
-        {/* 2. Login Access & College Institutional Details */}
+        {/* All Bank Details: Registered Bank Accounts */}
         <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-[#d0d7de]/70 pb-3">
-            <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-[#0969da]" />
-              Authorized Login Access & Institutional Details
-            </h2>
+            <div>
+              <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
+                <Landmark className="h-4 w-4 text-[#0969da]" />
+                All Bank Details & Registered Accounts ({selectedCollegeAccounts.length})
+              </h2>
+              <p className="text-xs text-[#57606a] mt-0.5">
+                Official institutional escrow and operating accounts registered for {selectedCollegeForView.name}
+              </p>
+            </div>
             <Badge variant="outline" className="text-[10px] text-[#0969da] border-[#0969da]/30 bg-[#ddf4ff]/40">
-              Government Verified Claims
+              Verified Bank Accounts
             </Badge>
           </div>
 
-          {/* Login Access Credentials Box */}
-          <div className="rounded-lg border border-[#0969da]/30 bg-[#ddf4ff]/25 p-4 space-y-3">
-            <div className="text-xs font-bold text-[#0969da] uppercase tracking-wider flex items-center gap-1.5">
-              <Lock className="h-3.5 w-3.5" />
-              University Finance Officer Portal Login Credentials
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className="bg-white p-3 rounded-md border border-[#d0d7de] flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[#57606a] uppercase font-semibold block">Authorized Login Email</span>
-                  <span className="font-mono text-xs font-bold text-[#0969da]">{selectedCollegeForView.financeEmail || 'N/A'}</span>
-                </div>
-                {selectedCollegeForView.financeEmail && (
-                  <button
-                    onClick={() => handleCopy(selectedCollegeForView.financeEmail, 'Login Email')}
-                    className="p-1 hover:bg-[#f6f8fa] rounded text-[#57606a] hover:text-[#0969da] cursor-pointer"
-                    title="Copy Email"
-                  >
-                    {copiedText === selectedCollegeForView.financeEmail ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                  </button>
-                )}
-              </div>
-
-              <div className="bg-white p-3 rounded-md border border-[#d0d7de] flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[#57606a] uppercase font-semibold block">Authentication Method</span>
-                  <span className="font-mono text-xs font-bold text-[#0969da]">4-Digit Mock OTP</span>
-                </div>
-                <Badge variant="outline" className="text-[9px] text-[#0969da] border-[#0969da]/30">
-                  Password-Free
-                </Badge>
-              </div>
-
-              <div className="bg-white p-3 rounded-md border border-[#d0d7de] flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[#57606a] uppercase font-semibold block">Assigned Role</span>
-                  <span className="text-xs font-bold text-[#1a7f37]">University CFO / Finance Officer</span>
-                </div>
-                <Badge variant="success" className="text-[9px]">Active</Badge>
-              </div>
-            </div>
-          </div>
-
-          {/* Institutional Parameters Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs pt-1">
-            <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50 space-y-1">
-              <span className="text-[10px] font-semibold text-[#57606a] uppercase">Campus Registrar Official Email</span>
-              <div className="font-mono text-xs text-[#1f2328] font-medium break-all">
-                {selectedCollegeForView.officialEmail || 'N/A'}
-              </div>
-              <span className="text-[10px] text-[#656d76]">Official State Correspondence</span>
-            </div>
-
-            <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50 space-y-1">
-              <span className="text-[10px] font-semibold text-[#57606a] uppercase">Campus Location & District</span>
-              <div className="text-xs text-[#1f2328] font-medium flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 text-[#57606a] shrink-0" />
-                {selectedCollegeForView.district || 'Bengaluru Urban'}, {selectedCollegeForView.state || 'Karnataka'}
-              </div>
-              {selectedCollegeForView.address && (
-                <div className="text-[10px] text-[#656d76] truncate">{selectedCollegeForView.address}</div>
-              )}
-            </div>
-
-            <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50 space-y-1">
-              <span className="text-[10px] font-semibold text-[#57606a] uppercase">Affiliated University / Governing Body</span>
-              <div className="text-xs text-[#1f2328] font-medium">
-                {selectedCollegeForView.affiliatedUniversity || 'Autonomous / Independent State University'}
-              </div>
-            </div>
-
-            <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50 space-y-1">
-              <span className="text-[10px] font-semibold text-[#57606a] uppercase">Operational Status</span>
-              <div>
-                <Badge
-                  variant={
-                    selectedCollegeForView.status === 'Optimal'
-                      ? 'success'
-                      : selectedCollegeForView.status === 'Watch' || selectedCollegeForView.status === 'Notice'
-                      ? 'warning'
-                      : 'danger'
-                  }
-                  className="text-[10px]"
-                >
-                  {selectedCollegeForView.status || 'Optimal'}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50 space-y-1">
-              <span className="text-[10px] font-semibold text-[#57606a] uppercase">Statutory Compliance Score</span>
-              <div className="text-xs font-bold text-[#1f2328] font-mono">
-                {compliance}% • Grade {selectedCollegeForView.complianceGrade || 'A+'}
-              </div>
-            </div>
-
-            <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50 space-y-1">
-              <span className="text-[10px] font-semibold text-[#57606a] uppercase">Last Financial Audit</span>
-              <div className="text-xs font-medium text-[#1f2328] font-mono">
-                {selectedCollegeForView.lastAudit || '2026-09-30'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Registered Bank Accounts of this University */}
-        <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
-              <Landmark className="h-4 w-4 text-[#0969da]" />
-              Registered Bank Accounts ({selectedCollegeAccounts.length})
-            </h2>
-          </div>
-
           {selectedCollegeAccounts.length === 0 ? (
-            <div className="text-center py-6 border border-dashed border-[#d0d7de] rounded-lg text-xs text-[#57606a]">
+            <div className="text-center py-8 border border-dashed border-[#d0d7de] rounded-lg text-xs text-[#57606a]">
+              <Landmark className="h-8 w-8 text-[#57606a] mx-auto mb-2 opacity-40" />
               No bank accounts registered yet by this institution.
             </div>
           ) : (
+            <div className="space-y-4">
+              {/* Account Cards Grid for Rich Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedCollegeAccounts.map((acc) => (
+                  <div
+                    key={acc.id}
+                    className="p-4 bg-[#f6f8fa] rounded-xl border border-[#d0d7de] space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-lg bg-[#ddf4ff] border border-[#0969da]/30 flex items-center justify-center text-[#0969da] font-bold shrink-0">
+                          <Landmark className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-[#1f2328]">{acc.bankName}</div>
+                          <div className="text-[10px] text-[#57606a]">{acc.branch || acc.branchName || 'Main Campus Branch'}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="success" className="text-[9px]">
+                          {acc.status || 'Active'}
+                        </Badge>
+                        <button
+                          onClick={() => handleDeleteAccount(acc)}
+                          className="p-1 text-[#57606a] hover:text-[#cf222e] rounded hover:bg-[#ffebe9] transition-colors cursor-pointer"
+                          title="Delete Bank Account"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
+                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
+                          Account Number
+                        </span>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <span className="font-mono font-bold text-xs text-[#1f2328] truncate">
+                            {acc.accountNumber}
+                          </span>
+                          <button
+                            onClick={() => handleCopy(acc.accountNumber, 'Account Number')}
+                            className="p-0.5 hover:bg-[#f6f8fa] rounded text-[#57606a] hover:text-[#0969da] cursor-pointer"
+                            title="Copy Account Number"
+                          >
+                            {copiedText === acc.accountNumber ? (
+                              <Check className="h-3 w-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
+                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
+                          IFSC Code
+                        </span>
+                        <div className="flex items-center justify-between mt-0.5">
+                          <span className="font-mono font-bold text-xs text-[#0969da]">
+                            {acc.ifscCode}
+                          </span>
+                          <button
+                            onClick={() => handleCopy(acc.ifscCode, 'IFSC Code')}
+                            className="p-0.5 hover:bg-[#f6f8fa] rounded text-[#57606a] hover:text-[#0969da] cursor-pointer"
+                            title="Copy IFSC Code"
+                          >
+                            {copiedText === acc.ifscCode ? (
+                              <Check className="h-3 w-3 text-emerald-600" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
+                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
+                          Account Holder
+                        </span>
+                        <span className="text-xs font-medium text-[#1f2328] block truncate mt-0.5">
+                          {acc.accountHolderName || selectedCollegeForView.name}
+                        </span>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
+                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
+                          Account Type
+                        </span>
+                        <span className="text-xs font-medium text-[#1f2328] block truncate mt-0.5">
+                          {acc.accountType || 'Treasury Operating Account'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70 flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
+                          Current Verified Balance
+                        </span>
+                        <span className="font-mono text-sm font-bold text-[#1a7f37]">
+                          {formatCurrency(Number(acc.currentBalance) || 0)}
+                        </span>
+                      </div>
+                      {acc.currency && (
+                        <span className="font-mono text-[10px] text-[#57606a] bg-[#f6f8fa] px-1.5 py-0.5 rounded border border-[#d0d7de]">
+                          {acc.currency}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Detailed Bank Accounts Table */}
+              <div className="overflow-x-auto rounded-lg border border-[#d0d7de]">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
+                    <tr>
+                      <th className="py-2.5 px-3">Bank Name</th>
+                      <th className="py-2.5 px-3">Account Number</th>
+                      <th className="py-2.5 px-3">Account Holder</th>
+                      <th className="py-2.5 px-3">Account Type</th>
+                      <th className="py-2.5 px-3">Branch & IFSC</th>
+                      <th className="py-2.5 px-3">Status</th>
+                      <th className="py-2.5 px-3 text-right">Balance</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#d0d7de]">
+                    {selectedCollegeAccounts.map((acc) => (
+                      <tr key={acc.id} className="hover:bg-[#f6f8fa]/80 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-[#1f2328]">{acc.bankName}</td>
+                        <td className="py-2.5 px-3 font-mono font-semibold text-[#1f2328]">
+                          {acc.accountNumber}
+                        </td>
+                        <td className="py-2.5 px-3 text-[#57606a]">
+                          {acc.accountHolderName || selectedCollegeForView.name}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <Badge variant="outline" className="text-[10px]">
+                            {acc.accountType || 'Treasury Operating Account'}
+                          </Badge>
+                        </td>
+                        <td className="py-2.5 px-3 text-[#57606a] font-mono">
+                          {acc.branch || acc.branchName || 'Main Branch'} • {acc.ifscCode}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <Badge variant="success" className="text-[9px]">
+                            {acc.status || 'Active'}
+                          </Badge>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1a7f37]">
+                          {formatCurrency(Number(acc.currentBalance) || 0)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => handleDeleteAccount(acc)}
+                            className="p-1 text-[#57606a] hover:text-[#cf222e] rounded hover:bg-[#ffebe9] transition-colors cursor-pointer"
+                            title="Delete Bank Account"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Filed Bank Statements */}
+        {selectedCollegeStatements.length > 0 && (
+          <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-3">
+            <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4 text-[#0969da]" />
+              Filed Bank Statements ({selectedCollegeStatements.length})
+            </h2>
             <div className="overflow-x-auto rounded-lg border border-[#d0d7de]">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
                   <tr>
-                    <th className="py-2.5 px-3">Bank Name</th>
-                    <th className="py-2.5 px-3">Account Number</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3">Branch & IFSC</th>
-                    <th className="py-2.5 px-3">Account Holder</th>
-                    <th className="py-2.5 px-3 text-right">Balance</th>
+                    <th className="py-2.5 px-3">Quarter & FY</th>
+                    <th className="py-2.5 px-3">Bank & Account</th>
+                    <th className="py-2.5 px-3">Statement Date</th>
+                    <th className="py-2.5 px-3 text-right">Opening Balance</th>
+                    <th className="py-2.5 px-3 text-right">Credits (+)</th>
+                    <th className="py-2.5 px-3 text-right">Debits (-)</th>
+                    <th className="py-2.5 px-3 text-right">Closing Balance</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#d0d7de]">
-                  {selectedCollegeAccounts.map((acc) => (
-                    <tr key={acc.id} className="hover:bg-[#f6f8fa]/80 transition-colors">
-                      <td className="py-2.5 px-3 font-semibold text-[#1f2328]">{acc.bankName}</td>
-                      <td className="py-2.5 px-3 font-mono font-semibold">{acc.accountNumber}</td>
-                      <td className="py-2.5 px-3">
-                        <Badge variant="outline" className="text-[10px]">
-                          {acc.accountType || 'State Treasury Escrow'}
-                        </Badge>
+                  {selectedCollegeStatements.map((stmt, idx) => (
+                    <tr key={stmt.id || idx} className="hover:bg-[#f6f8fa]/80 transition-colors">
+                      <td className="py-2.5 px-3 font-semibold text-[#1f2328]">
+                        {stmt.quarter} {stmt.financialYear}
                       </td>
-                      <td className="py-2.5 px-3 text-[#57606a]">
-                        {acc.branch || acc.branchName || 'Main Branch'} • {acc.ifscCode}
+                      <td className="py-2.5 px-3 font-mono text-[#57606a]">
+                        {stmt.bankName} ({stmt.accountNumber || '—'})
                       </td>
-                      <td className="py-2.5 px-3 text-[#57606a]">{acc.accountHolderName || selectedCollegeForView.name}</td>
+                      <td className="py-2.5 px-3 font-mono text-[#57606a]">
+                        {stmt.statementDate || stmt.uploadDate || '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono">
+                        {formatCurrency(Number(stmt.openingBalance) || 0)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-[#1a7f37]">
+                        +{formatCurrency(Number(stmt.totalCredits) || 0)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-[#cf222e]">
+                        -{formatCurrency(Number(stmt.totalDebits) || 0)}
+                      </td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1f2328]">
-                        {formatCurrency(Number(acc.currentBalance) || 0)}
+                        {formatCurrency(Number(stmt.closingBalance) || 0)}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <Badge variant="success" className="text-[10px]">
+                          {stmt.status || 'Verified'}
+                        </Badge>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* 4. Total Transactions Ledger of this University */}
+        {/* Bank Transactions Ledger */}
         <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
                 <FileText className="h-4 w-4 text-[#0969da]" />
-                Total Transactions ({selectedCollegeTransactions.length})
+                Bank Transactions ({selectedCollegeTransactions.length})
               </h2>
             </div>
 
@@ -463,7 +584,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
           {filteredTransactions.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-[#d0d7de] rounded-lg text-xs text-[#57606a]">
               {selectedCollegeTransactions.length === 0
-                ? 'No transactions filed yet. Transactions will appear dynamically once the college finance officer uploads bank statements.'
+                ? 'No transactions filed yet for this college’s bank accounts.'
                 : 'No transactions match your search filter.'}
             </div>
           ) : (
@@ -547,7 +668,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
   }
 
   // =========================================================================
-  // VIEW 2: ONLY CARD-WISE UNIVERSITIES (Card-wise view as requested)
+  // VIEW 2: ALL COLLEGES LIST ONLY (Default View for Government Admin)
   // =========================================================================
   return (
     <div className="space-y-6 pb-12">
@@ -563,7 +684,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
                 Universities & Colleges
               </h1>
               <div className="text-xs text-[#57606a]">
-                {universities.length} Registered State Institutions • Card Directory
+                {universities.length} Registered State Institutions • All Colleges Directory
               </div>
             </div>
           </div>
@@ -595,11 +716,11 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
           />
         </div>
         <span className="text-xs text-[#57606a] font-mono font-medium">
-          {filteredUniversities.length} Institutions Displayed
+          {filteredUniversities.length} Colleges Displayed
         </span>
       </div>
 
-      {/* Pure Card-Wise Universities Grid */}
+      {/* Pure List of All Colleges Table */}
       {filteredUniversities.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-[#d0d7de] rounded-xl bg-white p-6">
           <Building2 className="h-10 w-10 text-[#57606a] mx-auto mb-2 opacity-40" />
@@ -615,156 +736,122 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredUniversities.map((college) => {
-            const cAlloc = Number(college.allocation ?? college.allocatedAmount) || 0
-            const cSpent = Number(college.spent ?? college.spentAmount) || 0
-            const cBal = Number(college.availableCash) || Math.max(0, cAlloc - cSpent)
-            const cUtil = cAlloc > 0 ? Math.min(100, Math.round((cSpent / cAlloc) * 100)) : 0
+        <div className="overflow-x-auto rounded-xl border border-[#d0d7de] bg-white shadow-xs">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
+              <tr>
+                <th className="py-3 px-3.5">College Name & Code</th>
+                <th className="py-3 px-3.5">Institution Type</th>
+                <th className="py-3 px-3.5">District</th>
+                <th className="py-3 px-3.5">Bank Accounts</th>
+                <th className="py-3 px-3.5">Total Bank Balance</th>
+                <th className="py-3 px-3.5">Official Email</th>
+                <th className="py-3 px-3.5">Status</th>
+                <th className="py-3 px-3.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#d0d7de]">
+              {filteredUniversities.map((college) => {
+                const collegeAccounts = bankAccounts.filter(
+                  (a) =>
+                    a.universityId === college.id ||
+                    (college.code && a.universityId === college.code) ||
+                    (a.universityName && college.name && a.universityName.toLowerCase() === college.name.toLowerCase())
+                )
+                const collegeBal = collegeAccounts.reduce(
+                  (sum, a) => sum + (Number(a.currentBalance) || 0),
+                  0
+                )
 
-            const collegeAccounts = bankAccounts.filter(
-              (a) =>
-                a.universityId === college.id ||
-                (a.universityName && college.name && a.universityName.toLowerCase() === college.name.toLowerCase())
-            )
-            const collegeAccountIds = collegeAccounts.map((a) => a.id)
-            const collegeStatements = statements.filter(
-              (s) =>
-                s.universityId === college.id ||
-                collegeAccountIds.includes(s.accountId) ||
-                (s.universityName && college.name && s.universityName.toLowerCase().includes(college.name.toLowerCase()))
-            )
-            const txCount = collegeStatements.reduce((sum, s) => sum + (s.transactions?.length || 0), 0)
-
-            return (
-              <div
-                key={college.id}
-                onClick={() => setSelectedCollegeForView(college)}
-                className="group bg-white rounded-xl border border-[#d0d7de] p-5 hover:border-[#0969da] hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between space-y-4"
-              >
-                {/* Card Header: Icon, Name, Code & Status */}
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-9 w-9 rounded-lg bg-[#ddf4ff] border border-[#0969da]/30 flex items-center justify-center text-[#0969da] font-bold text-sm shrink-0 group-hover:bg-[#0969da] group-hover:text-white transition-colors">
-                        <Building2 className="h-4.5 w-4.5" />
+                return (
+                  <tr
+                    key={college.id}
+                    onClick={() => setSelectedCollegeForView(college)}
+                    className="hover:bg-[#f6f8fa]/80 transition-colors cursor-pointer group"
+                  >
+                    <td className="py-3 px-3.5">
+                      <div className="font-semibold text-xs text-[#1f2328] group-hover:text-[#0969da] transition-colors">
+                        {college.name}
                       </div>
-                      <div>
-                        <h2 className="text-sm font-bold text-[#1f2328] group-hover:text-[#0969da] transition-colors line-clamp-1">
-                          {college.name}
-                        </h2>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="font-mono text-[10px] bg-[#f6f8fa] border border-[#d0d7de] text-[#57606a] px-1.5 py-0.2 rounded font-semibold">
-                            {college.code}
-                          </span>
-                          <span className="text-[11px] text-[#57606a] flex items-center gap-0.5">
-                            <MapPin className="h-3 w-3 text-[#57606a]" />
-                            {college.district || 'Karnataka'}
-                          </span>
-                        </div>
+                      <div className="font-mono text-[10px] text-[#57606a] mt-0.5">
+                        {college.code}
                       </div>
-                    </div>
+                    </td>
 
-                    <Badge
-                      variant={
-                        college.status === 'Optimal'
-                          ? 'success'
-                          : college.status === 'Watch' || college.status === 'Notice'
-                          ? 'warning'
-                          : 'danger'
-                      }
-                      className="text-[9px] shrink-0"
-                    >
-                      {college.status || 'Optimal'}
-                    </Badge>
-                  </div>
+                    <td className="py-3 px-3.5">
+                      <Badge variant="outline" className="text-[10px]">
+                        {college.institutionType || 'State Public University'}
+                      </Badge>
+                    </td>
 
-                  <div className="text-[11px] text-[#656d76] line-clamp-1">
-                    {college.institutionType || 'State Public University'}
-                  </div>
-                </div>
-
-                {/* Financial Summary Figures */}
-                <div className="bg-[#f6f8fa] rounded-lg p-3 border border-[#d0d7de]/60 space-y-2.5">
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <span className="text-[9px] text-[#57606a] uppercase font-semibold block">Allocation</span>
-                      <span className="font-mono text-xs font-bold text-[#1f2328] block truncate" title={formatCurrency(cAlloc)}>
-                        {formatCurrency(cAlloc)}
+                    <td className="py-3 px-3.5 text-[#57606a]">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-[#57606a] shrink-0" />
+                        {college.district || 'Karnataka'}
                       </span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-[#57606a] uppercase font-semibold block">Spent</span>
-                      <span className="font-mono text-xs font-bold text-[#cf222e] block truncate" title={formatCurrency(cSpent)}>
-                        {formatCurrency(cSpent)}
+                    </td>
+
+                    <td className="py-3 px-3.5">
+                      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-[#0969da] bg-[#ddf4ff]/60 px-2 py-0.5 rounded border border-[#0969da]/20 font-semibold">
+                        <Landmark className="h-3 w-3" />
+                        {collegeAccounts.length} {collegeAccounts.length === 1 ? 'Account' : 'Accounts'}
                       </span>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-[#57606a] uppercase font-semibold block">Remaining</span>
-                      <span className="font-mono text-xs font-bold text-[#1a7f37] block truncate" title={formatCurrency(cBal)}>
-                        {formatCurrency(cBal)}
-                      </span>
-                    </div>
-                  </div>
+                    </td>
 
-                  {/* Utilization Progress Bar */}
-                  <div>
-                    <div className="flex justify-between items-center text-[10px] text-[#57606a] mb-1">
-                      <span>Budget Utilization</span>
-                      <span className="font-bold font-mono text-[#0969da]">{cUtil}%</span>
-                    </div>
-                    <div className="w-full bg-[#d0d7de]/50 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          cUtil > 85 ? 'bg-amber-500' : 'bg-[#0969da]'
-                        }`}
-                        style={{ width: `${Math.min(100, Math.max(0, cUtil))}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                    <td className="py-3 px-3.5 font-mono font-bold text-[#1a7f37]">
+                      {formatCurrency(collegeBal)}
+                    </td>
 
-                {/* Badges: Accounts Count & Transactions Count */}
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="bg-white border border-[#d0d7de] rounded-md py-1.5 px-2 flex items-center gap-1.5 text-[#1f2328]">
-                    <Landmark className="h-3.5 w-3.5 text-[#0969da] shrink-0" />
-                    <span className="font-medium truncate">{collegeAccounts.length} Bank Accounts</span>
-                  </div>
-                  <div className="bg-white border border-[#d0d7de] rounded-md py-1.5 px-2 flex items-center gap-1.5 text-[#1f2328]">
-                    <FileText className="h-3.5 w-3.5 text-[#1a7f37] shrink-0" />
-                    <span className="font-medium truncate">{txCount} Transactions</span>
-                  </div>
-                </div>
+                    <td className="py-3 px-3.5 font-mono text-[11px] text-[#57606a]">
+                      {college.officialEmail || 'N/A'}
+                    </td>
 
-                {/* Login Access Info Bar */}
-                <div className="bg-[#ddf4ff]/40 border border-[#0969da]/20 rounded-md p-2 flex items-center justify-between text-[11px]">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <KeyRound className="h-3.5 w-3.5 text-[#0969da] shrink-0" />
-                    <span className="font-mono text-[10px] text-[#0969da] font-medium truncate">
-                      {college.financeEmail || 'finance@university.edu'}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-semibold text-[#0969da] uppercase shrink-0">
-                    Login Active
-                  </span>
-                </div>
+                    <td className="py-3 px-3.5">
+                      <Badge
+                        variant={
+                          college.status === 'Optimal'
+                            ? 'success'
+                            : college.status === 'Watch' || college.status === 'Notice'
+                            ? 'warning'
+                            : 'danger'
+                        }
+                        className="text-[10px]"
+                      >
+                        {college.status || 'Optimal'}
+                      </Badge>
+                    </td>
 
-                {/* Card Action Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedCollegeForView(college)
-                  }}
-                  className="w-full text-xs font-semibold flex items-center justify-center gap-1.5 text-[#0969da] border-[#0969da]/30 hover:bg-[#0969da] hover:text-white transition-colors cursor-pointer"
-                >
-                  View University Data & Audit
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            )
-          })}
+                    <td className="py-3 px-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedCollegeForView(college)
+                          }}
+                          className="text-xs px-2.5 py-1 font-semibold text-[#0969da] border-[#0969da]/30 hover:bg-[#0969da] hover:text-white transition-colors cursor-pointer"
+                        >
+                          View Bank Details
+                          <ArrowRight className="h-3 w-3 ml-1" />
+                        </Button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteCollege(college)
+                          }}
+                          className="p-1.5 text-[#57606a] hover:text-[#cf222e] rounded-md hover:bg-[#ffebe9] transition-colors cursor-pointer"
+                          title="Delete College"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

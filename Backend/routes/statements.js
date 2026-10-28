@@ -57,7 +57,7 @@ router.get('/:id', (req, res) => {
 })
 
 // POST /api/statements/upload (Step 4: Quarterly Statement Upload)
-router.post('/upload', upload.single('statementFile'), (req, res) => {
+router.post('/upload', upload.single('statementFile'), async (req, res) => {
   try {
     const {
       universityId = 'univ-01',
@@ -83,7 +83,7 @@ router.post('/upload', upload.single('statementFile'), (req, res) => {
     }
 
     // Strict ownership verification: bank account MUST belong to authenticated user's institution
-    if (account.universityId !== university.id) {
+    if (account.universityId !== university.id && account.universityId !== university.code) {
       return res.status(403).json({
         success: false,
         error: `Authorization Denied: Bank account does not belong to institution "${university.name}". Cross-institution statement upload is forbidden.`,
@@ -281,7 +281,7 @@ router.post('/upload', upload.single('statementFile'), (req, res) => {
       transactions: extractedTransactions,
     }
 
-    db.createStatement(newStatement)
+    await db.createStatement(newStatement)
 
     // Automatically train FinBot on the uploaded statement data (Zero manual training needed)
     try {

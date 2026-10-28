@@ -116,23 +116,7 @@ router.post('/query', async (req, res) => {
 
 // GET /api/rag/documents - Lists indexed documents
 router.get('/documents', (req, res) => {
-  const statements = db.getStatements()
-  const policies = db.getPolicies()
-
-  const items = [
-    ...statements.map((s) => ({
-      id: s.id,
-      title: `${s.universityName} (${s.quarter})`,
-      snippet: `A/C ${s.accountNumber} - Credits: ₹${s.totalCredits}, Debits: ₹${s.totalDebits}, Closing: ₹${s.closingBalance}`,
-      metadata: { type: 'Uploaded Statement', file: s.fileName },
-    })),
-    ...policies.map((p) => ({
-      id: p.id,
-      title: `[${p.policyCode}] ${p.title}`,
-      snippet: p.directive,
-      metadata: { type: 'State Policy', category: p.category },
-    })),
-  ]
+  const items = ragEngine.getDocuments()
 
   res.json({
     success: true,

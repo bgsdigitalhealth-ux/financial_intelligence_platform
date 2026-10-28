@@ -207,6 +207,10 @@ export function FinancialDataProvider({ children }) {
         api.getPolicies(),
       ])
 
+      const deletedUnivIds = getStored('gfi_deleted_university_ids', [])
+      const deletedAccountIds = getStored('gfi_deleted_account_ids', [])
+      const deletedStatementIds = getStored('gfi_deleted_statement_ids', [])
+
       if (univRes.status === 'fulfilled' && Array.isArray(univRes.value?.universities)) {
         const liveUnivs = univRes.value.universities.filter(
           (u) =>
@@ -215,9 +219,28 @@ export function FinancialDataProvider({ children }) {
             u.id !== 'univ-mysore' &&
             u.code !== 'BU-BLR' &&
             u.code !== 'VTU-BEL' &&
-            u.code !== 'UOM-MYS'
+            u.code !== 'UOM-MYS' &&
+            !deletedUnivIds.includes(u.id) &&
+            (!u.code || !deletedUnivIds.includes(u.code))
         )
-        setUniversities(liveUnivs)
+
+        setUniversities((prev) => {
+          const currentLocal = prev && prev.length > 0 ? prev : getStored('gfi_universities', [])
+          const localOnly = currentLocal.filter(
+            (local) =>
+              !liveUnivs.some((live) => live.id === local.id || (local.code && live.code === local.code)) &&
+              !deletedUnivIds.includes(local.id) &&
+              (!local.code || !deletedUnivIds.includes(local.code))
+          )
+          const merged = [...liveUnivs, ...localOnly]
+          try {
+            localStorage.setItem('gfi_universities', JSON.stringify(merged))
+          } catch (e) {
+            console.warn(e)
+          }
+          return merged
+        })
+
         setSelectedUniversityId((prev) => {
           if (liveUnivs.length === 0) return ''
           if (prev && liveUnivs.some((u) => u.id === prev)) return prev
@@ -226,9 +249,28 @@ export function FinancialDataProvider({ children }) {
       }
       if (acctsRes.status === 'fulfilled' && Array.isArray(acctsRes.value?.accounts)) {
         const liveAccts = acctsRes.value.accounts.filter(
-          (a) => a.id !== 'acc-bu-01' && a.id !== 'acc-vtu-01'
+          (a) =>
+            a.id !== 'acc-bu-01' &&
+            a.id !== 'acc-vtu-01' &&
+            !deletedAccountIds.includes(a.id)
         )
-        setBankAccounts(liveAccts)
+
+        setBankAccounts((prev) => {
+          const currentLocal = prev && prev.length > 0 ? prev : getStored('gfi_bank_accounts', [])
+          const localOnly = currentLocal.filter(
+            (local) =>
+              !liveAccts.some((live) => live.id === local.id) &&
+              !deletedAccountIds.includes(local.id)
+          )
+          const merged = [...liveAccts, ...localOnly]
+          try {
+            localStorage.setItem('gfi_bank_accounts', JSON.stringify(merged))
+          } catch (e) {
+            console.warn(e)
+          }
+          return merged
+        })
+
         setSelectedAccountId((prev) => {
           if (liveAccts.length === 0) return ''
           if (prev && liveAccts.some((a) => a.id === prev)) return prev
@@ -236,9 +278,26 @@ export function FinancialDataProvider({ children }) {
         })
       }
       if (stmtsRes.status === 'fulfilled' && stmtsRes.value?.statements) {
-        setStatements(stmtsRes.value.statements)
-        if (stmtsRes.value.statements.length > 0) {
-          setActiveStatement((prev) => prev || stmtsRes.value.statements[0])
+        const liveStmts = stmtsRes.value.statements.filter(
+          (s) => !deletedStatementIds.includes(s.id)
+        )
+        setStatements((prev) => {
+          const currentLocal = prev && prev.length > 0 ? prev : getStored('gfi_statements', [])
+          const localOnly = currentLocal.filter(
+            (local) =>
+              !liveStmts.some((live) => live.id === local.id) &&
+              !deletedStatementIds.includes(local.id)
+          )
+          const merged = [...liveStmts, ...localOnly]
+          try {
+            localStorage.setItem('gfi_statements', JSON.stringify(merged))
+          } catch (e) {
+            console.warn(e)
+          }
+          return merged
+        })
+        if (liveStmts.length > 0) {
+          setActiveStatement((prev) => prev || liveStmts[0])
         }
       }
       if (repRes.status === 'fulfilled' && repRes.value?.data) {
@@ -271,8 +330,60 @@ export function FinancialDataProvider({ children }) {
     try {
       const res = await api.uploadStatement(formData)
       if (res && res.success && res.statement) {
-        setStatements((prev) => [res.statement, ...prev.filter((s) => s.id !== res.statement.id)])
+        setStatements((prev) => {
+          const next = [res.statement, ...prev.filter((s) => s.id !== res.statement.id)]
+          try {
+            localStorage.setItem('gfi_statements', JSON.stringify(next))
+            const deleted = getStored('gfi_deleted_statement_ids', []).filter((id) => id !== res.statement.id)
+            localStorage.setItem('gfi_deleted_statement_ids', JSON.stringify(deleted))
+          } catch (e) { }
+          return next
+        })
         setActiveStatement(res.statement)
+
+        // Dynamically update the bank account's live balance
+        if (res.statement.accountId && res.statement.closingBalance !== undefined) {
+          setBankAccounts((prev) => {
+            const nextAccts = prev.map((a) =>
+              a.id === res.statement.accountId || a.accountNumber === res.statement.accountNumber
+                ? { ...a, currentBalance: Number(res.statement.closingBalance) }
+                : a
+            )
+            try {
+              localStorage.setItem('gfi_bank_accounts', JSON.stringify(nextAccts))
+            } catch (e) { }
+            return nextAccts
+          })
+        }
+
+        // Dynamically update university's spent, availableCash and statementStatus
+        if (res.statement.universityId) {
+          setUniversities((prev) => {
+            const nextUnivs = prev.map((u) => {
+              if (
+                u.id === res.statement.universityId ||
+                (u.code && (u.code === res.statement.universityId || u.code === res.statement.universityCode))
+              ) {
+                const newSpent = Number(res.statement.totalDebits) || u.spent
+                const alloc = Number(u.allocation) || 0
+                return {
+                  ...u,
+                  spent: newSpent,
+                  availableCash: Math.max(0, alloc - newSpent),
+                  utilization: alloc > 0 ? Number(((newSpent / alloc) * 100).toFixed(2)) : u.utilization,
+                  statementStatus: 'AI Validated',
+                  lastAudit: new Date().toISOString().split('T')[0],
+                }
+              }
+              return u
+            })
+            try {
+              localStorage.setItem('gfi_universities', JSON.stringify(nextUnivs))
+            } catch (e) { }
+            return nextUnivs
+          })
+        }
+
         await refreshBackendData()
         return res.statement
       }
@@ -280,7 +391,7 @@ export function FinancialDataProvider({ children }) {
       console.warn('[FinancialDataContext] Statement upload API note, using local session:', err.message)
     }
 
-    const file = formData.get ? formData.get('statement') : null
+    const file = formData.get ? (formData.get('statementFile') || formData.get('statement')) : null
     const univId = (formData.get && formData.get('universityId')) || selectedUniversityId
     const acctId = (formData.get && formData.get('accountId')) || selectedAccountId
     const quarter = (formData.get && formData.get('quarter')) || 'Q3 FY 2026-27'
@@ -315,8 +426,51 @@ export function FinancialDataProvider({ children }) {
       transactions: [],
     }
 
-    setStatements((prev) => [localStmt, ...prev.filter((s) => s.id !== localStmt.id)])
+    setStatements((prev) => {
+      const next = [localStmt, ...prev.filter((s) => s.id !== localStmt.id)]
+      try {
+        localStorage.setItem('gfi_statements', JSON.stringify(next))
+      } catch (e) { }
+      return next
+    })
     setActiveStatement(localStmt)
+
+    // Dynamically update the bank account in local mode
+    if (acctId) {
+      setBankAccounts((prev) => {
+        const next = prev.map((a) => (a.id === acctId ? { ...a, currentBalance: localStmt.closingBalance } : a))
+        try {
+          localStorage.setItem('gfi_bank_accounts', JSON.stringify(next))
+        } catch (e) { }
+        return next
+      })
+    }
+
+    // Dynamically update university in local mode
+    if (univId) {
+      setUniversities((prev) => {
+        const next = prev.map((u) => {
+          if (u.id === univId || u.code === univId) {
+            const newSpent = localStmt.totalDebits
+            const alloc = Number(u.allocation) || 0
+            return {
+              ...u,
+              spent: newSpent,
+              availableCash: Math.max(0, alloc - newSpent),
+              utilization: alloc > 0 ? Number(((newSpent / alloc) * 100).toFixed(2)) : u.utilization,
+              statementStatus: 'AI Validated',
+              lastAudit: new Date().toISOString().split('T')[0],
+            }
+          }
+          return u
+        })
+        try {
+          localStorage.setItem('gfi_universities', JSON.stringify(next))
+        } catch (e) { }
+        return next
+      })
+    }
+
     return localStmt
   }
 
@@ -420,19 +574,33 @@ export function FinancialDataProvider({ children }) {
   }
 
   const deleteStatement = async (statementId) => {
+    // 1. Immediately remove from local state
+    const remaining = statements.filter((s) => s.id !== statementId)
+    setStatements(remaining)
+    if (activeStatement?.id === statementId) {
+      setActiveStatement(remaining[0] || null)
+    }
+
+    // 2. Persist to localStorage immediately
+    try {
+      localStorage.setItem('gfi_statements', JSON.stringify(remaining))
+      const deletedStmtIds = getStored('gfi_deleted_statement_ids', [])
+      if (!deletedStmtIds.includes(statementId)) {
+        deletedStmtIds.push(statementId)
+        localStorage.setItem('gfi_deleted_statement_ids', JSON.stringify(deletedStmtIds))
+      }
+    } catch (e) {
+      console.warn('LocalStorage deleteStatement note:', e)
+    }
+
+    // 3. Delete from backend if connected
     try {
       await api.deleteStatement(statementId)
-      setStatements((prev) => prev.filter((s) => s.id !== statementId))
-      if (activeStatement?.id === statementId) {
-        const remaining = statements.filter((s) => s.id !== statementId)
-        setActiveStatement(remaining[0] || null)
-      }
-      await refreshBackendData()
-      return true
     } catch (err) {
-      console.error('Error deleting statement:', err)
-      throw err
+      console.warn('Backend deleteStatement note:', err.message)
     }
+
+    return true
   }
 
   const createBankAccount = async (accountData) => {
@@ -464,8 +632,18 @@ export function FinancialDataProvider({ children }) {
       }
     }
 
-    setBankAccounts((prev) => [liveAccount, ...prev.filter((a) => a.id !== liveAccount.id)])
+    const nextAccts = [liveAccount, ...bankAccounts.filter((a) => a.id !== liveAccount.id)]
+    setBankAccounts(nextAccts)
     setSelectedAccountId(liveAccount.id)
+
+    try {
+      localStorage.setItem('gfi_bank_accounts', JSON.stringify(nextAccts))
+      const deletedAccountIds = getStored('gfi_deleted_account_ids', []).filter((id) => id !== liveAccount.id)
+      localStorage.setItem('gfi_deleted_account_ids', JSON.stringify(deletedAccountIds))
+    } catch (e) {
+      console.warn('LocalStorage createBankAccount note:', e)
+    }
+
     return liveAccount
   }
 
@@ -490,20 +668,37 @@ export function FinancialDataProvider({ children }) {
   }
 
   const deleteBankAccount = async (id) => {
+    // 1. Immediately remove from local state
+    const remainingAccts = bankAccounts.filter((a) => a.id !== id)
+    const remainingStmts = statements.filter((s) => s.accountId !== id)
+    setBankAccounts(remainingAccts)
+    setStatements(remainingStmts)
+
+    if (selectedAccountId === id) {
+      setSelectedAccountId(remainingAccts[0]?.id || '')
+    }
+
+    // 2. Persist to localStorage immediately
+    try {
+      localStorage.setItem('gfi_bank_accounts', JSON.stringify(remainingAccts))
+      localStorage.setItem('gfi_statements', JSON.stringify(remainingStmts))
+      const deletedAccountIds = getStored('gfi_deleted_account_ids', [])
+      if (!deletedAccountIds.includes(id)) {
+        deletedAccountIds.push(id)
+        localStorage.setItem('gfi_deleted_account_ids', JSON.stringify(deletedAccountIds))
+      }
+    } catch (e) {
+      console.warn('LocalStorage deleteBankAccount note:', e)
+    }
+
+    // 3. Delete from backend if connected
     try {
       await api.deleteBankAccount(id)
-      setBankAccounts((prev) => prev.filter((a) => a.id !== id))
-      setStatements((prev) => prev.filter((s) => s.accountId !== id))
-      if (selectedAccountId === id) {
-        const remaining = bankAccounts.filter((a) => a.id !== id)
-        setSelectedAccountId(remaining[0]?.id || '')
-      }
-      await refreshBackendData()
-      return true
     } catch (err) {
-      console.error('Error deleting bank account:', err)
-      throw err
+      console.warn('Backend deleteBankAccount note:', err.message)
     }
+
+    return true
   }
 
   const clearAllDummyData = async () => {
@@ -672,24 +867,70 @@ export function FinancialDataProvider({ children }) {
         affiliatedUniversity: univ.affiliatedUniversity || '',
         region: univ.region || 'Bengaluru Central',
         category: univ.category || 'State Public University',
-        allocation: Number(univ.allocatedAmount) || 0,
+        allocation: Number(univ.allocatedAmount || univ.allocation) || 0,
         spent: 0,
-        availableCash: Number(univ.allocatedAmount) || 0,
+        availableCash: Number(univ.allocatedAmount || univ.allocation) || 0,
         utilization: 0,
         complianceScore: 98,
         complianceGrade: 'A+',
         status: univ.status || 'Optimal',
         patents: 0,
         studentEnrollment: 0,
-        bankAccountCount: 0,
+        bankAccountCount: 1,
         statementStatus: 'Pending Upload',
         lastAudit: new Date().toISOString().split('T')[0],
       }
       token = 'act_' + Math.random().toString(36).substring(2, 10)
     }
 
-    setUniversities((prev) => [createdUniv, ...prev.filter((u) => u.id !== createdUniv.id)])
+    // Ensure an initial registered escrow account exists for the college
+    const hasExistingAcct = bankAccounts.some(
+      (a) => a.universityId === createdUniv.id || (createdUniv.code && a.universityId === createdUniv.code)
+    )
+    let initialAccount = null
+    if (!hasExistingAcct) {
+      initialAccount = {
+        id: 'acc-' + Date.now(),
+        universityId: createdUniv.id,
+        universityName: createdUniv.name,
+        accountNumber: (Math.floor(100000000000 + Math.random() * 900000000000)).toString(),
+        accountName: `${createdUniv.name} State Treasury Escrow`,
+        accountHolderName: `${createdUniv.name}`,
+        bankName: 'Canara Bank',
+        accountType: 'State Treasury Escrow',
+        branch: `${createdUniv.district || 'Main'} Campus Branch`,
+        ifscCode: 'CNRB0001001',
+        currentBalance: Number(createdUniv.allocation) || 0,
+        currency: 'INR',
+        status: 'Active',
+        description: 'Primary state higher education recurring allocation escrow',
+      }
+    }
+
+    const nextUnivs = [createdUniv, ...universities.filter((u) => u.id !== createdUniv.id && u.code !== createdUniv.code)]
+    setUniversities(nextUnivs)
     setSelectedUniversityId(createdUniv.id)
+
+    let nextAccts = bankAccounts
+    if (initialAccount) {
+      nextAccts = [initialAccount, ...bankAccounts.filter((a) => a.id !== initialAccount.id)]
+      setBankAccounts(nextAccts)
+    }
+
+    // Persist immediately and synchronously to localStorage
+    try {
+      localStorage.setItem('gfi_universities', JSON.stringify(nextUnivs))
+      if (initialAccount) {
+        localStorage.setItem('gfi_bank_accounts', JSON.stringify(nextAccts))
+      }
+      const deletedUnivs = getStored('gfi_deleted_university_ids', []).filter(
+        (delId) => delId !== createdUniv.id && delId !== createdUniv.code
+      )
+      localStorage.setItem('gfi_deleted_university_ids', JSON.stringify(deletedUnivs))
+    } catch (e) {
+      console.warn('LocalStorage immediate persistence error on add:', e)
+    }
+
     recordAuditLog(
       'UNIVERSITY_ALLOCATION_CREATED',
       `Authorized registration of ${createdUniv.name} (${createdUniv.code})`,
@@ -698,6 +939,13 @@ export function FinancialDataProvider({ children }) {
     )
 
     if (apiSuccess) {
+      if (initialAccount) {
+        try {
+          await api.createBankAccount(initialAccount)
+        } catch (acctErr) {
+          console.warn('[FinancialDataContext] Initial bank account backend sync note:', acctErr.message)
+        }
+      }
       await refreshBackendData()
     }
 
@@ -759,6 +1007,11 @@ export function FinancialDataProvider({ children }) {
       localStorage.setItem('gfi_universities', JSON.stringify(remainingUnivs))
       localStorage.setItem('gfi_bank_accounts', JSON.stringify(remainingAccts))
       localStorage.setItem('gfi_statements', JSON.stringify(remainingStmts))
+
+      const deletedUnivIds = getStored('gfi_deleted_university_ids', [])
+      if (!deletedUnivIds.includes(targetId)) deletedUnivIds.push(targetId)
+      if (targetCode && !deletedUnivIds.includes(targetCode)) deletedUnivIds.push(targetCode)
+      localStorage.setItem('gfi_deleted_university_ids', JSON.stringify(deletedUnivIds))
     } catch (e) {
       console.error('LocalStorage sync error on delete:', e)
     }
