@@ -1,0 +1,41 @@
+services:
+  # 1. Backend Web Service (Node.js API + Dynamic RAG Engine)
+  - type: web
+    name: gov-finance-backend
+    env: node
+    plan: free
+    rootDir: Backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 3306
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        value: gov_finance_intel
+
+  # 2. Frontend Static Site (React 19 + Vite)
+  - type: web
+    name: gov-finance-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: gov-finance-backend
+          property: host
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

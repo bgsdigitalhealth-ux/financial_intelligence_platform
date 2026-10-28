@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const path = require('path')
+const fs = require('fs')
 const db = require('./models/db')
 const mysqlConfig = require('./config/mysql')
 
@@ -94,6 +95,18 @@ app.use('/api/statements', require('./routes/statements'))
 app.use('/api/reports', require('./routes/reports'))
 app.use('/api/policies', require('./routes/policies'))
 app.use('/api/admin', require('./routes/admin'))
+
+// Serve built frontend assets if present in production/deployment
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist')
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist))
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/rag') || req.path.startsWith('/uploads')) {
+      return next()
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'))
+  })
+}
 
 // 404 Route handler
 app.use((req, res) => {
