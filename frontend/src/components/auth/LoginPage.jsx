@@ -9,6 +9,12 @@ import {
   Sparkles,
   ArrowLeft,
   X,
+  Send,
+  KeyRound,
+  RefreshCw,
+  ShieldCheck,
+  Check,
+  Copy,
 } from 'lucide-react'
 import { useAuth, ROLE_DETAILS } from '@/context/AuthContext'
 import { useFinancialData } from '@/context/FinancialDataContext'
