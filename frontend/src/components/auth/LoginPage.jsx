@@ -1,31 +1,20 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
-  Landmark,
-  Building2,
-  ShieldCheck,
   Lock,
   Mail,
-  Key,
   Users,
   AlertCircle,
-  CheckCircle2,
   ArrowRight,
   ShieldAlert,
   Sparkles,
   ArrowLeft,
-  KeyRound,
-  Copy,
-  Check,
-  Send,
-  RefreshCw,
   X,
 } from 'lucide-react'
-import { useAuth, REGISTERED_ACCOUNTS, ROLE_DETAILS } from '@/context/AuthContext'
+import { useAuth, ROLE_DETAILS } from '@/context/AuthContext'
 import { useFinancialData } from '@/context/FinancialDataContext'
 import { ROLES } from '@/data/mockFinancialData'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { KarnatakaGovLogo } from '@/components/shared/KarnatakaGovLogo'
 
 export function LoginPage({ onLoginSuccess, onTriggerToast }) {
   const { authenticate, selectRole, dynamicRoles, dynamicUsers, requestOtp } = useAuth()
@@ -238,57 +227,16 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
 
   return (
     <div className="min-h-screen bg-[#f6f8fa] flex flex-col justify-between text-[#1f2328]">
-      {/* Top Karnataka Government Official Header */}
-      <header className="border-b border-[#d0d7de] bg-white px-4 py-3 sm:px-8">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <KarnatakaGovLogo className="h-11 w-11 shrink-0" />
-            <div className="flex flex-col justify-center">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-[#1f2328] leading-tight">
-                  Karnataka Department of Higher Education
-                </span>
-                <span className="text-[10px] text-[#0969da] px-1.5 py-0.5 rounded border border-[#54aeff]/40 bg-[#ddf4ff] font-bold leading-none">
-                  GOVT OF KARNATAKA
-                </span>
-              </div>
-              <p className="text-xs text-[#57606a] mt-0.5 leading-tight">
-                University Financial Intelligence Platform • Single Sign-On OTP Authentication
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-[#57606a]">
-            <Lock className="h-3.5 w-3.5 text-[#1a7f37]" />
-            <span>K.S.U. Act 2000 & State Audit Portal</span>
-          </div>
-        </div>
-
-        {/* Official Purpose Banner */}
-        <div className="max-w-6xl mx-auto mt-2.5 pt-2 border-t border-[#eaeef2] flex items-center justify-between text-xs text-[#57606a]">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-[#0969da] uppercase tracking-wider text-[10px]">Purpose:</span>
-            <span>Monitor, analyze, and ensure timely submission and compliance of quarterly financial statements for all registered government and public universities in Karnataka.</span>
-          </div>
-        </div>
-      </header>
-
       {/* Main Authentication Flow Container */}
-      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
+      <main className="flex-1 flex items-center justify-center px-4 py-12 sm:px-6">
         <div className="w-full max-w-md">
           {/* STEP 1: LOGIN (Registered Email & 4-Digit Mock OTP - No Password) */}
           {step === 'LOGIN' && (
-            <div className="space-y-4">
-              <div className="text-center space-y-1 mb-2">
-                <div className="flex justify-center mb-2.5">
-                  <KarnatakaGovLogo className="h-14 w-14" />
-                </div>
-                <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">
+            <div className="space-y-5">
+              <div className="text-center mb-5">
+                <h1 className="text-2xl font-bold text-[#1f2328] tracking-tight">
                   University Financial Portal Login
                 </h1>
-                <p className="text-xs text-[#57606a]">
-                  Login with your registered College/University or Government email via 4-digit mock OTP
-                </p>
               </div>
 
               {/* Error Alert Banner */}
