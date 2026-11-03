@@ -1,15 +1,16 @@
 """
 LangGraph StateGraph RAG Pipeline for Karnataka Financial Intelligence Platform
 Orchestrates:
-1. Query Analysis & Entity Extraction
-2. Vector Retrieval from ChromaDB
-3. Structured Data Augmentation from MySQL (gov_finance_intel)
-4. LLM Generation via Ollama (Llama 3 / configurable model)
+1. Query Analysis & Entity Extraction (detects any college/university dynamically)
+2. Vector Retrieval from persistent ChromaDB
+3. Structured Data Augmentation from MySQL / disk db.json
+4. LLM Generation via Ollama (with local grounded financial synthesis fallback)
 5. Citation & Provenance Synthesis
 """
 import time
 import requests
 import json
+import re
 from typing import TypedDict, List, Dict, Any, Optional
 from langgraph.graph import StateGraph, END
 from .chroma_store import store
@@ -35,35 +36,75 @@ class RAGState(TypedDict):
 # --- Node 1: Analyze Query & Entity Extraction ---
 def analyze_query_node(state: RAGState) -> Dict[str, Any]:
     query_lower = state['query'].lower()
-    entities = {}
+    entities: Dict[str, Any] = {}
 
-    # Detect Universities
-    if 'vtu' in query_lower or 'belagavi' in query_lower or 'visvesvaraya' in query_lower:
-        entities['university'] = 'VTU Belagavi'
-        entities['univ_id'] = 'univ-01'
-    elif 'bangalore' in query_lower or 'bengaluru' in query_lower:
-        entities['university'] = 'Bangalore University'
-        entities['univ_id'] = 'univ-02'
-    elif 'mysore' in query_lower or 'mysuru' in query_lower:
-        entities['university'] = 'University of Mysore'
-        entities['univ_id'] = 'univ-03'
-    elif 'rguhs' in query_lower or 'health' in query_lower:
-        entities['university'] = 'RGUHS Bengaluru'
-        entities['univ_id'] = 'univ-04'
+    # 1. Check if university_id was explicitly provided in state
+    if state.get('university_id'):
+        univs = sql_connector.fetch_university_metrics(univ_id=state['university_id'])
+        if univs:
+            entities['univ_id'] = univs[0]['id']
+            entities['university'] = univs[0]['name']
 
-    # Detect Topic Intent
-    if any(k in query_lower for k in ['unallowable', 'luxury', 'hospitality', 'exception', 'violation', 'flag']):
+    # 2. Dynamically scan all institutions from database / db.json
+    all_univs = sql_connector.fetch_all_universities()
+    if not entities.get('univ_id'):
+        for u in all_univs:
+            u_name = u.get('name', '').lower()
+            u_code = u.get('code', '').lower()
+            u_id = u.get('id', '').lower()
+            if (u_name and u_name in query_lower) or (u_code and u_code in query_lower) or (u_id and u_id in query_lower):
+                entities['university'] = u.get('name')
+                entities['univ_id'] = u.get('id')
+                break
+
+    # Hardcoded aliases / short codes
+    if not entities.get('univ_id'):
+        if 'vtu' in query_lower or 'belagavi' in query_lower or 'visvesvaraya' in query_lower:
+            entities['university'] = 'VTU Belagavi'
+            entities['univ_id'] = 'univ-01'
+        elif 'bgs' in query_lower or 'bgsmch' in query_lower:
+            entities['university'] = 'BGSMCH'
+            entities['univ_id'] = 'univ-bgsmch'
+        elif 'bangalore' in query_lower or 'bengaluru' in query_lower:
+            entities['university'] = 'Bangalore University'
+            entities['univ_id'] = 'univ-02'
+        elif 'mysore' in query_lower or 'mysuru' in query_lower:
+            entities['university'] = 'University of Mysore'
+            entities['univ_id'] = 'univ-03'
+        elif 'rguhs' in query_lower or 'health' in query_lower:
+            entities['university'] = 'RGUHS Bengaluru'
+            entities['univ_id'] = 'univ-04'
+
+    # Domain financial keywords for RAG routing
+    financial_keywords = [
+        'unallowable', 'luxury', 'hospitality', 'exception', 'violation', 'flag',
+        'bank', 'account', 'balance', 'ifsc', 'canara', 'sbi', 'baroda', 'cash',
+        'credit', 'debit', 'statement', 'transaction', 'ref', 'ledger', 'act',
+        'statutory', 'section 47', 'section 48', 'cag', 'rule', 'policy', 'budget',
+        'allocation', 'spent', 'utilization', 'reserve', 'grant', 'college',
+        'university', 'institution', 'mysore', 'vtu', 'bangalore', 'bgs', 'bgsmch',
+        'audit', 'financial', 'inflow', 'outflow', 'opening', 'closing', 'reconcil',
+        'voucher', 'variance', 'discrepancy', 'quarter', 'q1', 'q2', 'q3', 'q4',
+        'payroll', 'vendor', 'chembio', 'zenith', 'nanotech', 'expenditure',
+        'deposit', 'withdraw', 'cost', 'fee', 'fund', 'treasury'
+    ]
+
+    has_financial_word = any(k in query_lower for k in financial_keywords)
+    has_numeric_figure = bool(re.search(r'\b\d{3,}\b', query_lower))
+    has_ref_code = bool(re.search(r'(?:ref|tx|rtgs|neft|inv)[-_a-z0-9]*', query_lower))
+
+    if not has_financial_word and not has_numeric_figure and not has_ref_code and not entities.get('univ_id'):
+        intent = 'unrelated_random'
+    elif any(k in query_lower for k in ['unallowable', 'luxury', 'hospitality', 'exception', 'violation', 'flag']):
         intent = 'compliance_exception'
-    elif any(k in query_lower for k in ['bank', 'account', 'balance', 'ifsc', 'canara', 'sbi', 'baroda', 'cash', 'credit', 'debit', 'statement', 'transaction', 'ref', 'ledger']):
+    elif any(k in query_lower for k in ['bank', 'account', 'balance', 'ifsc', 'canara', 'sbi', 'baroda', 'cash', 'credit', 'debit', 'statement', 'transaction', 'ref', 'ledger', 'opening', 'closing']):
         intent = 'banking_liquidity'
     elif any(k in query_lower for k in ['act', 'statutory', 'section 47', 'section 48', 'cag', 'rule', 'policy']):
         intent = 'statutory_policy'
     elif any(k in query_lower for k in ['budget', 'allocation', 'spent', 'utilization', 'reserve', 'grant']):
         intent = 'budget_appropriation'
-    elif any(k in query_lower for k in ['college', 'university', 'institution', 'mysore', 'vtu', 'bangalore', 'bgs', 'audit', 'financial', 'inflow', 'outflow', 'opening', 'closing']):
-        intent = 'general_financial'
     else:
-        intent = 'unrelated_random'
+        intent = 'general_financial'
 
     return {
         "intent": intent,
@@ -74,33 +115,38 @@ def analyze_query_node(state: RAGState) -> Dict[str, Any]:
 def retrieve_vector_context_node(state: RAGState) -> Dict[str, Any]:
     query = state['query']
     entities = state.get('entities', {})
-    
-    # Query ChromaDB Vector Database
+    intent = state.get('intent', 'general_financial')
+
+    if intent == 'unrelated_random':
+        return {"vector_context": []}
+
+    # Query ChromaDB Persistent Vector Database
     where_filter = None
     if entities.get('univ_id'):
-        # Optional metadata filtering in ChromaDB
         where_filter = {"university_id": entities['univ_id']}
-        
+
     chunks = store.similarity_search(query, n_results=4, where=where_filter)
-    
-    # Fallback to general query if specific filter returns 0
+
+    # Fallback to general query if filtered yields 0
     if not chunks and where_filter:
         chunks = store.similarity_search(query, n_results=4)
-        
+
     return {
         "vector_context": chunks
     }
 
-# --- Node 3: Query Structured Data from MySQL Database ---
+# --- Node 3: Query Structured Data from Database ---
 def query_sql_data_node(state: RAGState) -> Dict[str, Any]:
+    if state.get('intent') == 'unrelated_random':
+        return {"sql_context": {}, "data_cards": []}
+
     entities = state.get('entities', {})
     intent = state.get('intent', 'general_financial')
-    
+
     sql_data = {}
     data_cards = []
 
     try:
-        # If university specified, pull live metrics & bank accounts
         if entities.get('univ_id') or entities.get('university'):
             univs = sql_connector.fetch_university_metrics(
                 univ_id=entities.get('univ_id'),
@@ -129,14 +175,14 @@ def query_sql_data_node(state: RAGState) -> Dict[str, Any]:
 
             if accts:
                 data_cards.append({
-                    "title": "Institutional Bank Accounts (Live MySQL)",
-                    "subtitle": f"{len(accts)} active accounts registered with state treasury",
+                    "title": "Institutional Bank Accounts (Live Ledger)",
+                    "subtitle": f"{len(accts)} active account(s) registered with state treasury",
                     "items": [
                         {
                             "name": a['accountName'],
                             "bank": f"{a['bankName']} ({a['ifscCode']})",
                             "number": a['accountNumber'],
-                            "balance": f"₹{round(float(a['currentBalance']) / 10000000, 2)} Cr",
+                            "balance": f"₹{round(float(a['currentBalance']) / 10000000, 2)} Cr" if float(a['currentBalance']) >= 10000000 else f"₹{float(a['currentBalance']):,.2f}",
                             "status": a['status']
                         } for a in accts[:3]
                     ]
@@ -172,7 +218,7 @@ def query_sql_data_node(state: RAGState) -> Dict[str, Any]:
                 res_total = round(float(s.get('totalReserve', 0)) / 10000000, 2)
                 data_cards.append({
                     "title": "Karnataka Statewide Higher Education Telemetry",
-                    "subtitle": f"{s.get('totalUniversities')} Universities Consolidated Ledger",
+                    "subtitle": f"{s.get('totalUniversities', 0)} Institutions Consolidated Ledger",
                     "metrics": [
                         {"label": "Total State Budget", "value": f"₹{alloc_total} Cr"},
                         {"label": "Total Disbursed", "value": f"₹{disb_total} Cr"},
@@ -206,29 +252,26 @@ def llm_generate_node(state: RAGState) -> Dict[str, Any]:
     vector_context = state.get('vector_context', [])
     sql_context = state.get('sql_context', {})
     role = state.get('role', 'Government Leadership')
-    
+
     start_time = time.time()
-    
-    # 1. Format Context for Prompt
+
     docs_text = "\n\n".join([
         f"[Document: {c['metadata'].get('title', 'Policy Doc')} | Source: {c['metadata'].get('source', 'Karnataka Govt')}]\n{c['content']}"
         for c in vector_context
     ])
-    
     sql_text = json.dumps(sql_context, default=str, indent=2)
 
     system_prompt = f"""You are the official AI Financial Intelligence & Statutory RAG Copilot for the Karnataka Department of Higher Education.
 User Role: {role}
 You have access to:
-1. VECTOR DATABASE CONTEXT (Retrieved from ChromaDB - statutory acts, KGFR rules, SOPs, circulars).
-2. LIVE SQL DATABASE RECORDS (Queried directly from MySQL database 'gov_finance_intel').
+1. VECTOR DATABASE CONTEXT (Retrieved from ChromaDB - statutory acts, bank statements, KGFR rules, SOPs).
+2. LIVE SQL DATABASE RECORDS (Queried directly from financial database 'gov_finance_intel').
 
 Instructions:
 - Provide an authoritative, structured, and factual response.
 - Directly answer the query with precise monetary figures in Indian Rupees (₹, ₹ Cr, ₹ Lakhs).
 - Cite statutory clauses (e.g. KSU Act 2000 Section 47/48, KGFR Chapter 8, UGC 12(B)).
-- Clearly distinguish between allowable expenditures and flagged exceptions.
-- Provide practical recommendations tailored to the user's role.
+- If asked an unrelated or random question outside Karnataka university finance and banking, reply strictly: "I don't have information."
 """
 
     user_prompt = f"""USER QUERY: {query}
@@ -236,7 +279,7 @@ Instructions:
 CHROMA VECTOR CONTEXT:
 {docs_text if docs_text else "No specific policy chunks matched."}
 
-LIVE MYSQL DATABASE FACTS:
+LIVE DATABASE FACTS:
 {sql_text}
 
 Please generate the comprehensive financial intelligence response with citations and clear action points.
@@ -247,26 +290,35 @@ Please generate the comprehensive financial intelligence response with citations
 
     # Attempt calling Ollama
     try:
-        req_payload = {
-            "model": model,
-            "prompt": f"{system_prompt}\n\n{user_prompt}",
-            "stream": False,
-            "options": {
-                "temperature": 0.2,
-                "top_p": 0.9,
-            }
-        }
-        res = requests.post(f"{ollama_url}/api/generate", json=req_payload, timeout=25)
-        if res.status_code == 200:
-            data = res.json()
-            response_text = data.get("response", "")
-            ollama_status["connected"] = True
-            ollama_status["version"] = "Ollama Local Engine"
+        tags_res = requests.get(f"{ollama_url}/api/tags", timeout=1.5)
+        if tags_res.status_code == 200:
+            available_models = [m["name"] for m in tags_res.json().get("models", [])]
+            chosen_model = model
+            if chosen_model not in available_models and available_models:
+                chosen_model = available_models[0]
+
+            if chosen_model in available_models:
+                req_payload = {
+                    "model": chosen_model,
+                    "prompt": f"{system_prompt}\n\n{user_prompt}",
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.2,
+                        "top_p": 0.9,
+                    }
+                }
+                res = requests.post(f"{ollama_url}/api/generate", json=req_payload, timeout=25)
+                if res.status_code == 200:
+                    data = res.json()
+                    response_text = data.get("response", "")
+                    ollama_status["connected"] = True
+                    ollama_status["model"] = chosen_model
+                    ollama_status["version"] = "Ollama Local Engine"
     except Exception as e:
         ollama_status["error"] = str(e)
         ollama_status["connected"] = False
 
-    # High-fidelity synthesis fallback if Ollama endpoint is offline/warming up
+    # Grounded synthesis fallback if Ollama endpoint is offline or warming up
     if not response_text:
         response_text = _generate_local_synthesis(query, role, vector_context, sql_context)
 
@@ -279,7 +331,7 @@ Please generate the comprehensive financial intelligence response with citations
     }
 
 def _generate_local_synthesis(query: str, role: str, vector_context: List[Dict[str, Any]], sql_context: Dict[str, Any]) -> str:
-    """Fallback generator when Ollama is offline or warming up"""
+    """Deterministic, fact-checked financial synthesis when Ollama is offline or warming up."""
     univ_info = sql_context.get('universities', [{}])[0] if sql_context.get('universities') else None
     accts = sql_context.get('bank_accounts', [])
     exceptions = sql_context.get('exceptions', [])
@@ -289,7 +341,7 @@ def _generate_local_synthesis(query: str, role: str, vector_context: List[Dict[s
     top_title = top_chunk['metadata'].get('title', 'Karnataka State Financial Regulations') if top_chunk else 'KSU Act 2000'
 
     out = []
-    out.append(f"### Statutory & Financial Intelligence Assessment")
+    out.append("### Statutory & Financial Intelligence Assessment")
     out.append(f"**Operational Role:** {role} | **Knowledge Authority:** Karnataka Department of Higher Education\n")
 
     if univ_info:
@@ -305,40 +357,46 @@ def _generate_local_synthesis(query: str, role: str, vector_context: List[Dict[s
             out.append(f"- **Audit Warning:** ⚠️ *{univ_info.get('warningReason')}*")
 
     if accts:
-        out.append(f"\n#### 2. Institutional Treasury Accounts (MySQL Ledger)")
+        out.append("\n#### 2. Institutional Treasury Accounts (Live Ledger)")
         for a in accts[:3]:
-            bal_cr = round(float(a['currentBalance']) / 10000000, 2)
-            out.append(f"- **{a['accountName']}:** ₹{bal_cr} Cr ({a['bankName']} • IFSC: `{a['ifscCode']}`) — Status: `{a['status']}`")
+            bal_num = float(a['currentBalance'])
+            bal_str = f"₹{round(bal_num / 10000000, 2)} Cr" if bal_num >= 10000000 else f"₹{bal_num:,.2f}"
+            out.append(f"- **{a['accountName']}:** {bal_str} ({a['bankName']} • IFSC: `{a['ifscCode']}`) — Status: `{a['status']}`")
 
     if exceptions:
-        out.append(f"\n#### 3. AI Flagged Exceptions & Anomaly Status")
+        out.append("\n#### 3. Flagged Exceptions & Anomaly Ledger")
         for ex in exceptions[:2]:
-            out.append(f"- 🚩 **Ref `{ex['referenceNo']}` ({ex['category']}):** ₹{ex['amount']:,} — {ex['description']} (Allowable: `{ex['allowable']}`)")
+            out.append(f"- 🚩 **Ref `{ex['referenceNo']}` ({ex['category']}):** ₹{ex['amount']:,} — {ex['description']}")
 
-    if summary:
+    if summary and summary.get('totalUniversities'):
         alloc_tot = round(float(summary.get('totalAllocated', 0)) / 10000000, 2)
-        out.append(f"\n#### Consolidated Statewide Financial Telemetry")
-        out.append(f"- **Total 32 Universities Appropriation:** ₹{alloc_tot} Cr")
+        out.append("\n#### Consolidated Statewide Financial Telemetry")
+        out.append(f"- **Total Registered Higher Ed Campuses:** {summary.get('totalUniversities')}")
+        out.append(f"- **Total State Grant Appropriation:** ₹{alloc_tot} Cr")
         out.append(f"- **Statewide Average Utilization:** {summary.get('avgUtilization')}%")
         out.append(f"- **Institutions with Audit Flags:** {summary.get('flaggedCount')} Campuses")
 
     if top_chunk:
-        out.append(f"\n#### 4. Regulatory & Statutory Basis")
+        out.append("\n#### 4. Vector Knowledge Context (ChromaDB)")
         out.append(f"According to **{top_title}** ({top_chunk['metadata'].get('section', 'General Provisions')}):")
-        out.append(f"> \"{top_chunk['content'][:280]}...\"")
+        snippet = top_chunk['content'][:320]
+        out.append(f"> \"{snippet}...\"")
 
-    out.append(f"\n#### 5. Recommended Actions")
-    out.append(f"1. **Comptroller Action:** Under KSU Act Section 48, reconcile bank statement debits against approved budget lines.")
-    out.append(f"2. **Exception Remediation:** Submit credit advice reversals for duplicate wires prior to quarterly filing.")
-    out.append(f"3. **State Portal Submission:** Complete digital sign-off on the Financial Intelligence Platform for Higher Education.")
+    out.append("\n#### 5. Recommended Actions")
+    out.append("1. **Comptroller Action:** Under KSU Act Section 48, reconcile bank statement debits against approved budget lines.")
+    out.append("2. **Exception Remediation:** Submit credit advice reversals for duplicate wires prior to quarterly filing.")
+    out.append("3. **State Portal Submission:** Complete digital sign-off on the Financial Intelligence Platform for Higher Education.")
 
     return "\n".join(out)
 
 # --- Node 5: Synthesize Citations & Provenance ---
 def synthesize_citations_node(state: RAGState) -> Dict[str, Any]:
+    if state.get('intent') == 'unrelated_random':
+        return {"citations": []}
+
     vector_context = state.get('vector_context', [])
     sql_context = state.get('sql_context', {})
-    
+
     citations = []
 
     # Vector DB Citations (ChromaDB)
@@ -353,33 +411,33 @@ def synthesize_citations_node(state: RAGState) -> Dict[str, Any]:
             "docType": meta.get('doc_type', 'Policy')
         })
 
-    # SQL Live Ledger Citations (MySQL)
+    # Database Citations
     if sql_context.get('universities'):
         citations.append({
-            "type": "Live SQL Database (MySQL)",
-            "title": "Table `universities` (32 Karnataka State Campuses)",
+            "type": "Live Institutional Ledger",
+            "title": "Registered Colleges & Universities",
             "section": "Budget Allocations & Utilization",
-            "source": "MySQL Database: gov_finance_intel",
+            "source": "State Financial Database: gov_finance_intel",
             "relevanceScore": 1.0,
             "docType": "Relational Ledger"
         })
 
     if sql_context.get('bank_accounts'):
         citations.append({
-            "type": "Live SQL Database (MySQL)",
-            "title": "Table `bank_accounts` (96 Institutional Accounts)",
+            "type": "Live Treasury Ledger",
+            "title": "Official Bank Accounts",
             "section": "Treasury & Account Balances",
-            "source": "MySQL Database: gov_finance_intel",
+            "source": "State Financial Database: gov_finance_intel",
             "relevanceScore": 1.0,
             "docType": "Relational Ledger"
         })
 
     if sql_context.get('exceptions'):
         citations.append({
-            "type": "Live SQL Database (MySQL)",
-            "title": "Table `transactions` (Flagged Anomalies)",
+            "type": "Anomaly Audit Trail",
+            "title": "Flagged Transactions",
             "section": "AI Exception Resolution",
-            "source": "MySQL Database: gov_finance_intel",
+            "source": "State Financial Database: gov_finance_intel",
             "relevanceScore": 0.98,
             "docType": "Audit Log"
         })
@@ -392,14 +450,12 @@ def synthesize_citations_node(state: RAGState) -> Dict[str, Any]:
 def build_rag_graph():
     workflow = StateGraph(RAGState)
 
-    # Add Nodes
     workflow.add_node("analyze_query", analyze_query_node)
     workflow.add_node("retrieve_vector_context", retrieve_vector_context_node)
     workflow.add_node("query_sql_data", query_sql_data_node)
     workflow.add_node("llm_generate", llm_generate_node)
     workflow.add_node("synthesize_citations", synthesize_citations_node)
 
-    # Define Flow Edges (as shown in Architecture Diagram)
     workflow.set_entry_point("analyze_query")
     workflow.add_edge("analyze_query", "retrieve_vector_context")
     workflow.add_edge("retrieve_vector_context", "query_sql_data")

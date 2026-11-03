@@ -355,6 +355,39 @@ Audit Flag / Note: ${t.flag || 'None (Reconciled with voucher)'}
     const bankAccounts = db.getBankAccounts() || []
     const statements = db.getStatements() || []
 
+    // 0. RANDOM / UNRELATED QUESTION DETECTION (Strict upfront filter)
+    const domainKeywords = [
+      'statement', 'bank', 'account', 'balance', 'transaction', 'debit', 'credit',
+      'spent', 'spending', 'spend', 'allocation', 'grant', 'budget', 'money', 'voucher',
+      'ifsc', 'reference', 'ref', 'vendor', 'zepto', 'openai', 'payroll', 'salary',
+      'audit', 'compliance', 'karnataka', 'university', 'college', 'vtu', 'bu', 'uom', 'bgs', 'bgsmch',
+      'quarter', 'q1', 'q2', 'q3', 'q4', 'fy', 'expense', 'expenses', 'closing', 'opening',
+      'reconciliation', 'rupee', 'inr', 'amount', 'cost', 'ledger', 'cash', 'reserve',
+      'appropriation', 'fund', 'canara', 'sbi', 'icici', 'hdfc', 'axis', 'baroda', 'syndicate',
+      'allowable', 'exception', 'unallowable', 'variance', 'discrepancy', 'patents', 'cfo',
+      'registrar', 'withdrawn', 'deposited', 'transferred', 'fees', 'scholarship', 'fellowship',
+      'cleanroom', 'research', 'lab', 'infrastructure', 'payment', 'inflow', 'outflow', 'receipt',
+      'act', 'statutory', 'section 47', 'section 48', 'cag', 'rule', 'policy'
+    ]
+
+    const hasDomainKeyword = domainKeywords.some((kw) => qLower.includes(kw))
+    const hasMonetaryNumber = /\b\d{3,}\b/.test(rawQuery)
+    const hasReferencePattern = /(?:ref|rtgs|neft|ach|tx|inv)[-_a-z0-9]*/i.test(rawQuery)
+    const mentionsCollege = universities.some((u) => (u.name && qLower.includes(u.name.toLowerCase())) || (u.code && qLower.includes(u.code.toLowerCase())))
+
+    const isFinancialInquiry = hasDomainKeyword || hasMonetaryNumber || hasReferencePattern || mentionsCollege
+
+    if (!isFinancialInquiry) {
+      return {
+        success: true,
+        query: rawQuery,
+        answer: "I don't have information.",
+        dataCards: [],
+        citations: [],
+        latencyMs: 12,
+      }
+    }
+
     // Check if any statements have been uploaded
     if (this.vectorStore.length === 0) {
       return {
@@ -463,27 +496,7 @@ Audit Flag / Note: ${t.flag || 'None (Reconciled with voucher)'}
     const topScore = topChunk ? topChunk.relevanceScore : 0
 
     // 4. RANDOM / UNRELATED QUESTION DETECTION
-    // Check if query contains any domain-relevant financial, banking, or institutional terms
-    const domainKeywords = [
-      'statement', 'bank', 'account', 'balance', 'transaction', 'debit', 'credit',
-      'spent', 'spending', 'spend', 'allocation', 'grant', 'budget', 'money', 'voucher',
-      'ifsc', 'reference', 'ref', 'vendor', 'zepto', 'openai', 'payroll', 'salary',
-      'audit', 'compliance', 'karnataka', 'university', 'college', 'vtu', 'bu', 'uom', 'bgs',
-      'quarter', 'q1', 'q2', 'q3', 'q4', 'fy', 'expense', 'expenses', 'closing', 'opening',
-      'reconciliation', 'rupee', 'inr', 'amount', 'cost', 'ledger', 'cash', 'reserve',
-      'appropriation', 'fund', 'canara', 'sbi', 'icici', 'hdfc', 'axis', 'baroda', 'syndicate',
-      'allowable', 'exception', 'unallowable', 'variance', 'discrepancy', 'patents', 'cfo',
-      'registrar', 'withdrawn', 'deposited', 'transferred', 'fees', 'scholarship', 'fellowship',
-      'cleanroom', 'research', 'lab', 'infrastructure', 'payment', 'inflow', 'outflow', 'receipt'
-    ]
-
-    const hasDomainKeyword = domainKeywords.some((kw) => qLower.includes(kw))
-    const hasMonetaryNumber = /\b\d{3,}\b/.test(rawQuery)
-    const hasReferencePattern = /(?:ref|rtgs|neft|ach|tx|inv)[-_a-z0-9]*/i.test(rawQuery)
-
-    const isFinancialInquiry = hasDomainKeyword || hasMonetaryNumber || hasReferencePattern
-
-    // If query has no financial relevance OR semantic similarity is very low, it is a random question
+    // If topScore is very low or no financial inquiry, return no information
     if (!isFinancialInquiry || topScore < 0.20) {
       return {
         success: true,

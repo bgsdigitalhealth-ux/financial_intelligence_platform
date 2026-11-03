@@ -286,6 +286,19 @@ router.post('/upload', upload.single('statementFile'), async (req, res) => {
     // Automatically train FinBot on the uploaded statement data (Zero manual training needed)
     try {
       ragEngine.indexStatement(newStatement)
+
+      // Persist vector chunks into persistent ChromaDB
+      const { spawn } = require('child_process')
+      const pythonExe = process.platform === 'win32' ? 'python' : 'python3'
+      const indexerScript = path.join(__dirname, '..', 'rag', 'indexer.py')
+      const uploadsDir = path.join(__dirname, '..', 'uploads')
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true })
+      }
+      const tmpStmtFile = path.join(uploadsDir, `stmt-${newStatement.id}.json`)
+      fs.writeFileSync(tmpStmtFile, JSON.stringify(newStatement), 'utf8')
+      const child = spawn(pythonExe, [indexerScript, '--statement-file', tmpStmtFile], { detached: true, stdio: 'ignore' })
+      child.unref()
     } catch (ragErr) {
       console.warn('[FinBot Auto-Train Warning]', ragErr.message)
     }
@@ -454,6 +467,9 @@ router.delete('/:id', async (req, res) => {
     }
 
     await db.deleteStatement(req.params.id)
+    try {
+      ragEngine.removeStatement(req.params.id)
+    } catch (e) {}
 
     db.addAuditLog({
       user: 'Finance Officer',

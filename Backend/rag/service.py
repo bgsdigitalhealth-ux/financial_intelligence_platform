@@ -210,6 +210,21 @@ def index_document(payload: IndexDocumentRequest):
         "totalChunks": store.collection.count()
     }
 
+@app.post("/sync")
+@app.post("/api/rag/sync")
+def sync_knowledge_base():
+    """Syncs statutory documents and all statements into ChromaDB"""
+    try:
+        from . import indexer
+        stats = indexer.sync_all_to_chroma()
+        return {
+            "success": True,
+            "message": "ChromaDB synchronized successfully",
+            "stats": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 def start_server():
     print(f"Starting Karnataka Financial Intelligence RAG Microservice on port {config.RAG_SERVICE_PORT}...")
     uvicorn.run("rag.service:app", host="0.0.0.0", port=config.RAG_SERVICE_PORT, reload=False)
