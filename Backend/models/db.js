@@ -113,28 +113,45 @@ class MySQLDatabase {
           u.code !== 'VTU-BEL' &&
           u.code !== 'UOM-MYS'
       )
-      if (validUnivRows.length > 0) {
-        this.cache.universities = validUnivRows
-      } else if (this.cache.universities && this.cache.universities.length > 0) {
-        for (const u of this.cache.universities) {
-          try {
-            await pool.query(
-              `INSERT INTO universities 
-               (id, code, official_email, finance_email, name, institution_type, state, district, address, affiliated_university,
-                region, category, allocation, spent, utilization, 
-                compliance_score, compliance_grade, status, patents, student_enrollment, bank_account_count, statement_status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON DUPLICATE KEY UPDATE name=VALUES(name)`,
-              [
-                u.id, u.code, u.officialEmail || '', u.financeEmail || '', u.name, u.institutionType || 'State Public University',
-                u.state || 'Karnataka', u.district || '', u.address || '', u.affiliatedUniversity || '',
-                u.region || 'Bengaluru Central', u.category || 'State University', u.allocation || 0, u.spent || 0,
-                u.utilization || 0, u.complianceScore || 90, u.complianceGrade || 'A', u.status || 'Optimal',
-                u.patents || 0, u.studentEnrollment || 0, u.bankAccountCount || 0, u.statementStatus || 'Pending Upload'
-              ]
-            )
-          } catch (syncErr) {}
+      // 1. Union Merge Universities (MySQL + Disk fallback)
+      const mergedUnivMap = new Map()
+      for (const u of (this.cache.universities || [])) {
+        if (u && (u.id || u.code)) {
+          const key = String(u.id || u.code).trim().toLowerCase()
+          mergedUnivMap.set(key, u)
+          if (u.code) mergedUnivMap.set(String(u.code).trim().toLowerCase(), u)
+          if (u.id) mergedUnivMap.set(String(u.id).trim().toLowerCase(), u)
         }
+      }
+      for (const u of validUnivRows) {
+        if (u && (u.id || u.code)) {
+          const key = String(u.id || u.code).trim().toLowerCase()
+          mergedUnivMap.set(key, u)
+          if (u.code) mergedUnivMap.set(String(u.code).trim().toLowerCase(), u)
+          if (u.id) mergedUnivMap.set(String(u.id).trim().toLowerCase(), u)
+        }
+      }
+      this.cache.universities = Array.from(new Set(mergedUnivMap.values()))
+
+      // Persist all merged universities to MySQL
+      for (const u of this.cache.universities) {
+        try {
+          await pool.query(
+            `INSERT INTO universities 
+             (id, code, official_email, finance_email, name, institution_type, state, district, address, affiliated_university,
+              region, category, allocation, spent, utilization, 
+              compliance_score, compliance_grade, status, patents, student_enrollment, bank_account_count, statement_status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+            [
+              u.id, u.code, u.officialEmail || '', u.financeEmail || '', u.name, u.institutionType || 'State Public University',
+              u.state || 'Karnataka', u.district || '', u.address || '', u.affiliatedUniversity || '',
+              u.region || 'Bengaluru Central', u.category || 'State University', u.allocation || 0, u.spent || 0,
+              u.utilization || 0, u.complianceScore || 90, u.complianceGrade || 'A', u.status || 'Optimal',
+              u.patents || 0, u.studentEnrollment || 0, u.bankAccountCount || 0, u.statementStatus || 'Pending Upload'
+            ]
+          )
+        } catch (syncErr) {}
       }
 
       const [acctRows] = await pool.query(`
@@ -149,23 +166,33 @@ class MySQLDatabase {
       const validAcctRows = (acctRows || []).filter(
         (a) => a.id !== 'acc-bu-01' && a.id !== 'acc-vtu-01'
       )
-      if (validAcctRows.length > 0) {
-        this.cache.bankAccounts = validAcctRows
-      } else if (this.cache.bankAccounts && this.cache.bankAccounts.length > 0) {
-        for (const a of this.cache.bankAccounts) {
-          try {
-            await pool.query(
-              `INSERT INTO bank_accounts 
-               (id, university_id, account_number, account_name, account_holder_name, bank_name, account_type, branch, ifsc_code, current_balance, currency, status, description)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON DUPLICATE KEY UPDATE current_balance=VALUES(current_balance)`,
-              [
-                a.id, a.universityId, a.accountNumber, a.accountName, a.accountHolderName, a.bankName,
-                a.accountType, a.branch, a.ifscCode, a.currentBalance, a.currency, a.status, a.description
-              ]
-            )
-          } catch (syncErr) {}
+      // 2. Union Merge Bank Accounts (MySQL + Disk fallback)
+      const mergedAcctMap = new Map()
+      for (const a of (this.cache.bankAccounts || [])) {
+        if (a && a.id) {
+          mergedAcctMap.set(String(a.id).trim().toLowerCase(), a)
         }
+      }
+      for (const a of validAcctRows) {
+        if (a && a.id) {
+          mergedAcctMap.set(String(a.id).trim().toLowerCase(), a)
+        }
+      }
+      this.cache.bankAccounts = Array.from(new Set(mergedAcctMap.values()))
+
+      for (const a of this.cache.bankAccounts) {
+        try {
+          await pool.query(
+            `INSERT INTO bank_accounts 
+             (id, university_id, account_number, account_name, account_holder_name, bank_name, account_type, branch, ifsc_code, current_balance, currency, status, description)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE current_balance=VALUES(current_balance)`,
+            [
+              a.id, a.universityId, a.accountNumber, a.accountName, a.accountHolderName, a.bankName,
+              a.accountType, a.branch, a.ifscCode, a.currentBalance, a.currency, a.status, a.description
+            ]
+          )
+        } catch (syncErr) {}
       }
 
       const [stmtRows] = await pool.query(`
@@ -209,29 +236,38 @@ class MySQLDatabase {
         console.warn('[MySQL db.js] transactions query note, falling back to statement raw_transactions:', txQueryErr.message)
       }
 
-      // Attach transactions to statements
-      this.cache.statements = stmtRows.map((stmt) => {
-        let txs = txRows.filter((t) => t.statementId === stmt.id)
-        if (txs.length === 0 && stmt.rawTransactions) {
-          try {
-            txs = typeof stmt.rawTransactions === 'string' ? JSON.parse(stmt.rawTransactions) : stmt.rawTransactions
-          } catch (e) {
-            txs = []
+      // 3. Union Merge Statements (MySQL + Disk fallback)
+      const mergedStmtMap = new Map()
+      for (const s of (this.cache.statements || [])) {
+        if (s && s.id) {
+          mergedStmtMap.set(String(s.id).trim().toLowerCase(), s)
+        }
+      }
+      for (const stmt of stmtRows) {
+        if (stmt && stmt.id) {
+          let txs = txRows.filter((t) => t.statementId === stmt.id)
+          if (txs.length === 0 && stmt.rawTransactions) {
+            try {
+              txs = typeof stmt.rawTransactions === 'string' ? JSON.parse(stmt.rawTransactions) : stmt.rawTransactions
+            } catch (e) {
+              txs = []
+            }
           }
+          mergedStmtMap.set(String(stmt.id).trim().toLowerCase(), {
+            ...stmt,
+            aiValidation: {
+              confidenceScore: stmt.aiConfidence || 98.2,
+              reconciliationMatch: Boolean(stmt.reconciliationMatch),
+              varianceAmount: stmt.varianceAmount || 0,
+              summary: stmt.aiSummary || '',
+              totalTransactions: Array.isArray(txs) ? txs.length : 0,
+              exceptionsCount: Array.isArray(txs) ? txs.filter((t) => t.status === 'Exception' && !t.resolved).length : 0,
+            },
+            transactions: Array.isArray(txs) ? txs : [],
+          })
         }
-        return {
-          ...stmt,
-          aiValidation: {
-            confidenceScore: stmt.aiConfidence || 98.2,
-            reconciliationMatch: Boolean(stmt.reconciliationMatch),
-            varianceAmount: stmt.varianceAmount || 0,
-            summary: stmt.aiSummary || '',
-            totalTransactions: Array.isArray(txs) ? txs.length : 0,
-            exceptionsCount: Array.isArray(txs) ? txs.filter((t) => t.status === 'Exception' && !t.resolved).length : 0,
-          },
-          transactions: Array.isArray(txs) ? txs : [],
-        }
-      })
+      }
+      this.cache.statements = Array.from(new Set(mergedStmtMap.values()))
 
       const [logRows] = await pool.query(`
         SELECT id, hash, timestamp_str AS timestamp, user_name AS user,
