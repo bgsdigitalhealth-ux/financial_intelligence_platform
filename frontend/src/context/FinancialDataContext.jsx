@@ -207,9 +207,27 @@ export function FinancialDataProvider({ children }) {
         api.getPolicies(),
       ])
 
-      const deletedUnivIds = getStored('gfi_deleted_university_ids', [])
-      const deletedAccountIds = getStored('gfi_deleted_account_ids', [])
-      const deletedStatementIds = getStored('gfi_deleted_statement_ids', [])
+      const rawDeletedUniv = getStored('gfi_deleted_university_ids', [])
+      const deletedUnivIds = (Array.isArray(rawDeletedUniv) ? rawDeletedUniv : [])
+        .filter((id) => id && typeof id === 'string' && id.trim().length > 0)
+        .map((id) => id.trim().toLowerCase())
+
+      const isDeletedUniv = (id, code) => {
+        if (!id && !code) return false
+        const idLower = String(id || '').trim().toLowerCase()
+        const codeLower = String(code || '').trim().toLowerCase()
+        return (idLower && deletedUnivIds.includes(idLower)) || (codeLower && deletedUnivIds.includes(codeLower))
+      }
+
+      const rawDeletedAccts = getStored('gfi_deleted_account_ids', [])
+      const deletedAccountIds = (Array.isArray(rawDeletedAccts) ? rawDeletedAccts : [])
+        .filter((id) => id && typeof id === 'string' && id.trim().length > 0)
+        .map((id) => id.trim().toLowerCase())
+
+      const rawDeletedStmts = getStored('gfi_deleted_statement_ids', [])
+      const deletedStatementIds = (Array.isArray(rawDeletedStmts) ? rawDeletedStmts : [])
+        .filter((id) => id && typeof id === 'string' && id.trim().length > 0)
+        .map((id) => id.trim().toLowerCase())
 
       if (univRes.status === 'fulfilled' && Array.isArray(univRes.value?.universities)) {
         const liveUnivs = univRes.value.universities.filter(
@@ -220,73 +238,93 @@ export function FinancialDataProvider({ children }) {
             u.code !== 'BU-BLR' &&
             u.code !== 'VTU-BEL' &&
             u.code !== 'UOM-MYS' &&
-            !deletedUnivIds.includes(u.id) &&
-            (!u.code || !deletedUnivIds.includes(u.code))
+            !isDeletedUniv(u.id, u.code)
         )
 
+        let mergedUnivs = liveUnivs
         setUniversities((prev) => {
           const currentLocal = prev && prev.length > 0 ? prev : getStored('gfi_universities', [])
           const localOnly = currentLocal.filter(
             (local) =>
               !liveUnivs.some((live) => live.id === local.id || (local.code && live.code === local.code)) &&
-              !deletedUnivIds.includes(local.id) &&
-              (!local.code || !deletedUnivIds.includes(local.code))
+              !isDeletedUniv(local.id, local.code)
           )
           const merged = [...liveUnivs, ...localOnly]
+          mergedUnivs = merged
           try {
             localStorage.setItem('gfi_universities', JSON.stringify(merged))
           } catch (e) {
             console.warn(e)
           }
+
+          if (localOnly.length > 0) {
+            localOnly.forEach((loc) => {
+              api.createUniversity(loc).catch(() => {})
+            })
+          }
+
           return merged
         })
 
         setSelectedUniversityId((prev) => {
-          if (liveUnivs.length === 0) return ''
-          if (prev && liveUnivs.some((u) => u.id === prev)) return prev
-          return liveUnivs[0]?.id || ''
+          const currentMerged = mergedUnivs.length > 0 ? mergedUnivs : getStored('gfi_universities', [])
+          if (currentMerged.length === 0) return ''
+          if (prev && currentMerged.some((u) => u.id === prev || (u.code && u.code === prev))) return prev
+          return currentMerged[0]?.id || ''
         })
       }
+
       if (acctsRes.status === 'fulfilled' && Array.isArray(acctsRes.value?.accounts)) {
         const liveAccts = acctsRes.value.accounts.filter(
           (a) =>
             a.id !== 'acc-bu-01' &&
             a.id !== 'acc-vtu-01' &&
-            !deletedAccountIds.includes(a.id)
+            !deletedAccountIds.includes(String(a.id || '').trim().toLowerCase())
         )
 
+        let mergedAccounts = liveAccts
         setBankAccounts((prev) => {
           const currentLocal = prev && prev.length > 0 ? prev : getStored('gfi_bank_accounts', [])
           const localOnly = currentLocal.filter(
             (local) =>
               !liveAccts.some((live) => live.id === local.id) &&
-              !deletedAccountIds.includes(local.id)
+              !deletedAccountIds.includes(String(local.id || '').trim().toLowerCase())
           )
           const merged = [...liveAccts, ...localOnly]
+          mergedAccounts = merged
           try {
             localStorage.setItem('gfi_bank_accounts', JSON.stringify(merged))
           } catch (e) {
             console.warn(e)
           }
+
+          if (localOnly.length > 0) {
+            localOnly.forEach((acct) => {
+              api.createBankAccount(acct).catch(() => {})
+            })
+          }
+
           return merged
         })
 
         setSelectedAccountId((prev) => {
-          if (liveAccts.length === 0) return ''
-          if (prev && liveAccts.some((a) => a.id === prev)) return prev
-          return liveAccts[0]?.id || ''
+          const currentMerged = mergedAccounts.length > 0 ? mergedAccounts : getStored('gfi_bank_accounts', [])
+          if (currentMerged.length === 0) return ''
+          if (prev && currentMerged.some((a) => a.id === prev)) return prev
+          return currentMerged[0]?.id || ''
         })
       }
+
       if (stmtsRes.status === 'fulfilled' && stmtsRes.value?.statements) {
         const liveStmts = stmtsRes.value.statements.filter(
-          (s) => !deletedStatementIds.includes(s.id)
+          (s) => !deletedStatementIds.includes(String(s.id || '').trim().toLowerCase())
         )
         setStatements((prev) => {
           const currentLocal = prev && prev.length > 0 ? prev : getStored('gfi_statements', [])
           const localOnly = currentLocal.filter(
             (local) =>
               !liveStmts.some((live) => live.id === local.id) &&
-              !deletedStatementIds.includes(local.id)
+              !deletedStatementIds.includes(String(local.id || '').trim().toLowerCase())
           )
           const merged = [...liveStmts, ...localOnly]
           try {
@@ -922,10 +960,16 @@ export function FinancialDataProvider({ children }) {
       localStorage.setItem('gfi_universities', JSON.stringify(nextUnivs))
       if (initialAccount) {
         localStorage.setItem('gfi_bank_accounts', JSON.stringify(nextAccts))
+        const deletedAccts = getStored('gfi_deleted_account_ids', []).filter(
+          (delId) => delId && String(delId).trim().toLowerCase() !== String(initialAccount.id).trim().toLowerCase()
+        )
+        localStorage.setItem('gfi_deleted_account_ids', JSON.stringify(deletedAccts))
       }
-      const deletedUnivs = getStored('gfi_deleted_university_ids', []).filter(
-        (delId) => delId !== createdUniv.id && delId !== createdUniv.code
-      )
+      const deletedUnivs = getStored('gfi_deleted_university_ids', []).filter((delId) => {
+        if (!delId) return false
+        const d = String(delId).trim().toLowerCase()
+        return d !== String(createdUniv.id).trim().toLowerCase() && (!createdUniv.code || d !== String(createdUniv.code).trim().toLowerCase())
+      })
       localStorage.setItem('gfi_deleted_university_ids', JSON.stringify(deletedUnivs))
     } catch (e) {
       console.warn('LocalStorage immediate persistence error on add:', e)
@@ -1008,8 +1052,10 @@ export function FinancialDataProvider({ children }) {
       localStorage.setItem('gfi_bank_accounts', JSON.stringify(remainingAccts))
       localStorage.setItem('gfi_statements', JSON.stringify(remainingStmts))
 
-      const deletedUnivIds = getStored('gfi_deleted_university_ids', [])
-      if (!deletedUnivIds.includes(targetId)) deletedUnivIds.push(targetId)
+      const rawDeleted = getStored('gfi_deleted_university_ids', [])
+      const deletedUnivIds = (Array.isArray(rawDeleted) ? rawDeleted : [])
+        .filter((item) => item && typeof item === 'string' && item.trim().length > 0)
+      if (targetId && !deletedUnivIds.includes(targetId)) deletedUnivIds.push(targetId)
       if (targetCode && !deletedUnivIds.includes(targetCode)) deletedUnivIds.push(targetCode)
       localStorage.setItem('gfi_deleted_university_ids', JSON.stringify(deletedUnivIds))
     } catch (e) {

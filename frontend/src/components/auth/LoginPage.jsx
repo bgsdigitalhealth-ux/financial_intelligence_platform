@@ -18,6 +18,7 @@ import {
   Check,
   Send,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import { useAuth, REGISTERED_ACCOUNTS, ROLE_DETAILS } from '@/context/AuthContext'
 import { useFinancialData } from '@/context/FinancialDataContext'
@@ -42,6 +43,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
   const [isLoading, setIsLoading] = useState(false)
   const [otpCountdown, setOtpCountdown] = useState(0)
   const [copiedOtp, setCopiedOtp] = useState(false)
+  const [showOtpPopup, setShowOtpPopup] = useState(false)
 
   // Error State matching flowchart: "Show error (Invalid credentials)"
   const [errorMessage, setErrorMessage] = useState('')
@@ -51,13 +53,15 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
   const [selectedRoleKey, setSelectedRoleKey] = useState('')
   const [roleAuthError, setRoleAuthError] = useState('')
 
-  // Countdown timer for OTP resend
+  // Countdown timer for OTP resend and auto-closing popup after 30 seconds
   useEffect(() => {
     if (otpCountdown > 0) {
       const timer = setTimeout(() => setOtpCountdown((c) => c - 1), 1000)
       return () => clearTimeout(timer)
+    } else if (otpCountdown === 0 && showOtpPopup) {
+      setShowOtpPopup(false)
     }
-  }, [otpCountdown])
+  }, [otpCountdown, showOtpPopup])
 
   // Dynamic 3 Roles (Loaded from MySQL /api/auth/roles)
   const rolesToDisplay = useMemo(() => {
@@ -85,34 +89,6 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
     ]
   }, [dynamicRoles])
 
-  // Registered Institutions & Department Emails for instant quick selection
-  const quickAccounts = useMemo(() => {
-    const list = [
-      {
-        name: 'Govt Admin (Dept Higher Ed)',
-        email: 'sec-higheredu@karnataka.gov.in',
-        role: 'Government Admin',
-        badge: 'Govt Admin',
-      },
-    ]
-
-    // Populate exclusively from active registered colleges list
-    if (colleges && colleges.length > 0) {
-      colleges.forEach((c) => {
-        if (c.financeEmail) {
-          list.push({
-            name: c.name,
-            email: c.financeEmail,
-            role: 'College Finance Officer',
-            badge: c.code || 'University',
-          })
-        }
-      })
-    }
-
-    return list
-  }, [colleges])
-
   // Handle Requesting / Sending 4-Digit Mock OTP to registered email
   const handleSendOtp = async (targetEmail = email) => {
     const clean = (targetEmail || '').trim()
@@ -137,13 +113,13 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
       if (res && res.success && res.otp) {
         setSentOtp(res.otp)
         setOtpSent(true)
-        setOtp(res.otp) // Auto-fill for friction-free verification
-        setOtpCountdown(60)
+        setOtpCountdown(30)
+        setShowOtpPopup(true)
 
         if (onTriggerToast) {
           onTriggerToast(
             '4-Digit Mock OTP Sent',
-            `Mock verification code for ${clean}: ${res.otp}`,
+            `Mock verification code: ${res.otp} (Valid for 30s)`,
             'info'
           )
         }
@@ -155,19 +131,12 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
       const mock = Math.floor(1000 + Math.random() * 9000).toString()
       setSentOtp(mock)
       setOtpSent(true)
-      setOtp(mock)
-      setOtpCountdown(60)
+      setOtpCountdown(30)
+      setShowOtpPopup(true)
       if (onTriggerToast) {
-        onTriggerToast('4-Digit Mock OTP Sent', `Mock verification code: ${mock}`, 'info')
+        onTriggerToast('4-Digit Mock OTP Sent', `Mock verification code: ${mock} (Valid for 30s)`, 'info')
       }
     }
-  }
-
-  // Quick fill helper for effortless testing
-  const handleQuickSelect = (accEmail) => {
-    setEmail(accEmail)
-    setErrorMessage('')
-    handleSendOtp(accEmail)
   }
 
   // Copy OTP to clipboard
@@ -382,66 +351,6 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                     </div>
                   </div>
 
-                  {/* High-Visibility Mock OTP Notification Banner */}
-                  {otpSent && sentOtp && (
-                    <div className="rounded-lg border border-[#0969da]/30 bg-[#ddf4ff] p-3 space-y-2 animate-in fade-in-50 duration-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-[#0969da]">
-                          <Sparkles className="h-4 w-4 text-[#0969da]" />
-                          <span>Mock OTP Sent to Registered Email</span>
-                        </div>
-                        <span className="text-[10px] font-mono text-[#57606a]">
-                          Valid for 10 mins
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between bg-white rounded-md p-2.5 border border-[#54aeff]/30">
-                        <div>
-                          <div className="text-[10px] text-[#57606a] uppercase font-semibold">
-                            4-Digit Verification Code
-                          </div>
-                          <div className="font-mono text-xl font-extrabold tracking-[0.3em] text-[#0969da]">
-                            {sentOtp}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleCopyOtp(sentOtp)}
-                            className="text-[11px] h-7 px-2 border-[#0969da]/30 text-[#0969da] hover:bg-[#ddf4ff]"
-                          >
-                            {copiedOtp ? (
-                              <Check className="h-3 w-3 text-emerald-600 mr-1" />
-                            ) : (
-                              <Copy className="h-3 w-3 mr-1" />
-                            )}
-                            {copiedOtp ? 'Copied' : 'Copy'}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="primary"
-                            size="sm"
-                            onClick={() => {
-                              setOtp(sentOtp)
-                              setErrorMessage('')
-                            }}
-                            className="text-[11px] h-7 px-2 font-semibold"
-                          >
-                            Auto-fill OTP
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="text-[10px] text-[#57606a] flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
-                        <span>Password is not required. Use the 4-digit code above to sign in.</span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* 4-Digit OTP Input Field (Shown once OTP is requested) */}
                   {otpSent ? (
                     <div className="space-y-1.5">
@@ -471,20 +380,31 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                       </div>
 
                       <div className="flex items-center justify-between text-xs pt-1">
-                        <span className="text-[11px] text-[#57606a]">
+                        <div className="text-[11px] text-[#57606a]">
                           {otpCountdown > 0 ? (
-                            `Resend OTP in ${otpCountdown}s`
+                            <div className="flex items-center gap-2">
+                              <span>Resend in {otpCountdown}s</span>
+                              {!showOtpPopup && sentOtp && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowOtpPopup(true)}
+                                  className="text-[#0969da] hover:underline font-medium cursor-pointer"
+                                >
+                                  View Mock OTP ({otpCountdown}s)
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleSendOtp(email)}
-                              className="text-[#0969da] hover:underline flex items-center gap-1 cursor-pointer"
+                              className="text-[#0969da] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                             >
                               <RefreshCw className="h-3 w-3" />
-                              Resend 4-digit OTP
+                              Send again
                             </button>
                           )}
-                        </span>
+                        </div>
 
                         <span className="text-[10px] text-[#57606a] font-mono">
                           {otp.length}/4 digits
@@ -535,43 +455,6 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                     </Button>
                   )}
                 </form>
-
-                {/* Quick Selection Helper for Registered Institutions */}
-                <div className="pt-3 border-t border-[#eaeef2] space-y-2">
-                  <div className="text-[11px] font-semibold text-[#57606a] flex items-center justify-between">
-                    <span>Quick Select Registered Institutions:</span>
-                    <span className="text-[10px] text-[#0969da]">Instant OTP</span>
-                  </div>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {quickAccounts.slice(0, 5).map((acc) => (
-                      <button
-                        key={acc.email}
-                        type="button"
-                        onClick={() => handleQuickSelect(acc.email)}
-                        className={`w-full text-left p-2 rounded-md border text-xs transition-all flex items-center justify-between group cursor-pointer ${
-                          email === acc.email
-                            ? 'border-[#0969da] bg-[#ddf4ff]/40 text-[#0969da]'
-                            : 'border-[#d0d7de]/70 bg-white hover:bg-[#f6f8fa] text-[#1f2328]'
-                        }`}
-                      >
-                        <div className="truncate pr-2">
-                          <div className="font-semibold text-[11px] text-[#1f2328] group-hover:text-[#0969da] truncate">
-                            {acc.name}
-                          </div>
-                          <div className="font-mono text-[10px] text-[#57606a] truncate">
-                            {acc.email}
-                          </div>
-                        </div>
-                        <Badge
-                          variant={acc.role === 'Government Admin' ? 'primary' : 'outline'}
-                          className="text-[9px] shrink-0"
-                        >
-                          {acc.badge}
-                        </Badge>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -589,44 +472,6 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                 <p className="text-xs text-[#57606a]">
                   Choose an authorized persona console to access corresponding data ledgers
                 </p>
-              </div>
-
-              {/* Authenticated Identity Pill */}
-              <div className="rounded-md border border-[#d0d7de] bg-white p-3 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2.5">
-                  <img
-                    src={authenticatedUser.avatar}
-                    alt={authenticatedUser.name}
-                    className="h-9 w-9 rounded-full object-cover border border-[#d0d7de]"
-                  />
-                  <div>
-                    <div className="font-semibold text-[#1f2328] flex items-center gap-1.5">
-                      {authenticatedUser.name}
-                      <CheckCircle2 className="h-3.5 w-3.5 text-[#1a7f37]" />
-                    </div>
-                    <div className="text-[11px] text-[#57606a] font-mono">
-                      {authenticatedUser.email}
-                    </div>
-                    <div className="text-[10px] text-[#656d76]">
-                      {authenticatedUser.organization}
-                    </div>
-                  </div>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStep('LOGIN')
-                    setOtpSent(false)
-                    setOtp('')
-                    setRoleAuthError('')
-                  }}
-                  className="text-xs text-[#57606a] hover:text-[#1f2328] cursor-pointer"
-                >
-                  <ArrowLeft className="h-3 w-3 mr-1" />
-                  Switch Email
-                </Button>
               </div>
 
               {/* Authorization Error Banner (if unauthorized role clicked) */}
@@ -722,10 +567,113 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                   <span>Launch Platform Console</span>
                   <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
                 </Button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('LOGIN')
+                      setOtpSent(false)
+                      setOtp('')
+                      setRoleAuthError('')
+                    }}
+                    className="text-xs text-[#57606a] hover:text-[#0969da] hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <ArrowLeft className="h-3 w-3" />
+                    <span>Switch Email / Back to Login</span>
+                  </button>
+                </div>
               </form>
             </div>
           )}
         </div>
+
+        {/* 30-Second Mock OTP Popup Modal */}
+        {showOtpPopup && otpCountdown > 0 && sentOtp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-150">
+            <div className="relative w-full max-w-sm rounded-lg border border-[#d0d7de] bg-white p-5 text-[#1f2328] shadow-2xl animate-in zoom-in-95 duration-150 space-y-4">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-[#eaeef2] pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ddf4ff] text-[#0969da]">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-[#1f2328]">Mock Verification Code</h3>
+                    <p className="text-[10px] text-[#57606a]">Valid for 30 seconds</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-[#0969da] bg-[#ddf4ff] border border-[#54aeff]/30 px-2 py-0.5 rounded-full">
+                    {otpCountdown}s
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowOtpPopup(false)}
+                    className="rounded-md p-1 text-[#57606a] hover:bg-[#eaeef2] hover:text-[#1f2328] transition-colors cursor-pointer"
+                    aria-label="Close dialog"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body: 4-digit code */}
+              <div className="text-center space-y-2">
+                <div className="text-[11px] text-[#57606a]">
+                  Your 4-digit mock sign-in OTP for <span className="font-semibold text-[#1f2328]">{email}</span>:
+                </div>
+                <div className="font-mono text-3xl font-extrabold tracking-[0.35em] text-[#0969da] bg-[#ddf4ff]/50 py-3 px-4 rounded-lg border border-[#54aeff]/40 text-center select-all">
+                  {sentOtp}
+                </div>
+
+                {/* 30s Countdown Progress Bar */}
+                <div className="w-full bg-[#eaeef2] h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className="bg-[#0969da] h-full transition-all duration-1000 ease-linear"
+                    style={{ width: `${(otpCountdown / 30) * 100}%` }}
+                  />
+                </div>
+
+                <p className="text-[10px] text-[#57606a]">
+                  Popup will auto-close in <span className="font-bold text-[#0969da]">{otpCountdown}s</span>.
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#eaeef2]">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleCopyOtp(sentOtp)}
+                  className="text-xs h-8 px-3 border-[#d0d7de] text-[#1f2328] hover:bg-[#f6f8fa] cursor-pointer"
+                >
+                  {copiedOtp ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600 mr-1" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  {copiedOtp ? 'Copied' : 'Copy'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="blue"
+                  size="sm"
+                  onClick={() => {
+                    setOtp(sentOtp)
+                    setErrorMessage('')
+                    setShowOtpPopup(false)
+                  }}
+                  className="text-xs h-8 px-3 font-semibold cursor-pointer"
+                >
+                  Auto-fill OTP
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}

@@ -195,6 +195,18 @@ async function initMySQL(seedData) {
       // Ignore if exists
     }
 
+    try {
+      await conn.query(`ALTER TABLE users ADD COLUMN activation_token VARCHAR(255) NULL;`)
+    } catch (e) {
+      // Ignore if exists
+    }
+
+    try {
+      await conn.query(`ALTER TABLE users ADD COLUMN activation_token_expires_at TIMESTAMP NULL;`)
+    } catch (e) {
+      // Ignore if exists
+    }
+
     // Ensure Roles exist
     await conn.query(`
       CREATE TABLE IF NOT EXISTS roles (
@@ -227,6 +239,8 @@ async function initMySQL(seedData) {
         avatar_url VARCHAR(255) NOT NULL,
         authorized_roles JSON NOT NULL,
         status ENUM('Active', 'Suspended', 'Pending') NOT NULL DEFAULT 'Active',
+        activation_token VARCHAR(255) NULL,
+        activation_token_expires_at TIMESTAMP NULL,
         last_login TIMESTAMP NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
