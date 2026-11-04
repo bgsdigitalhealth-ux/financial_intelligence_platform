@@ -34,6 +34,7 @@ import { AIAnalysisValidationView } from '@/components/roles/UniversityFinance/A
 import { UnivComplianceView } from '@/components/roles/UniversityFinance/UnivComplianceView'
 import { UnivAIInsightsView } from '@/components/roles/UniversityFinance/UnivAIInsightsView'
 import { UnivReportsView } from '@/components/roles/UniversityFinance/UnivReportsView'
+import { UnivSettingsView } from '@/components/roles/UniversityFinance/UnivSettingsView'
 import { SubmissionComplianceView } from '@/components/roles/UniversityFinance/SubmissionComplianceView'
 import { UniversityOverview } from '@/components/roles/UniversityFinance/UniversityOverview'
 import { DepartmentalSpend } from '@/components/roles/UniversityFinance/DepartmentalSpend'
@@ -282,6 +283,13 @@ export default function App() {
         case 'reports':
           return (
             <UnivReportsView
+              onSelectTab={setActiveTab}
+              onTriggerToast={triggerToast}
+            />
+          )
+        case 'settings':
+          return (
+            <UnivSettingsView
               onSelectTab={setActiveTab}
               onTriggerToast={triggerToast}
             />

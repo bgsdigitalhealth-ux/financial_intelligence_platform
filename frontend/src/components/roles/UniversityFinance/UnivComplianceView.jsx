@@ -97,6 +97,7 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
   const [auditResults, setAuditResults] = useState(null)
   const [isCertified, setIsCertified] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [activeComplianceTab, setActiveComplianceTab] = useState('checks') // 'checks', 'rules', 'exceptions'
 
   // Dynamic calculations from activeStatement
   const activeTransactions = activeStatement?.transactions || []
@@ -315,493 +316,297 @@ export function UnivComplianceView({ onSelectTab, onTriggerToast }) {
 
   return (
     <div className="space-y-6">
-      {/* 1. Header Banner */}
-      <div className="rounded-lg border border-[#d0d7de] bg-white p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-2xs">
+      {/* 1. Top Header Row: Compliance title + FY selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
         <div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-[#8250df]" />
-            <h1 className="text-sm font-bold text-[#1f2328]">
-              Statutory Compliance & Audit Verification
-            </h1>
-            <Badge variant="purple" className="text-[10px]">
-              Step 6: Compliance
-            </Badge>
-          </div>
+          <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">Compliance</h1>
           <p className="text-xs text-[#57606a] mt-0.5">
-            <strong>{myUniversity.name}</strong> • Automated evaluation of institutional bank ledgers against K.S.U. Act 2000 § 102 & KGFR Chapter 8.
+            Check financial transactions against university & government policies
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="purple"
-            size="sm"
-            onClick={runLangGraphComplianceAudit}
-            disabled={isRunningAudit || !activeStatement}
-            className="text-xs font-semibold shadow-2xs cursor-pointer"
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <select
+              className="text-xs font-semibold bg-white border border-[#d0d7de] rounded-lg px-3 py-1.5 pr-7 text-[#1f2328] appearance-none focus:outline-none focus:border-[#16a34a] cursor-pointer shadow-2xs"
+            >
+              <option value="FY 2025 - 2026">FY 2025 - 2026</option>
+              <option value="FY 2024 - 2025">FY 2024 - 2025</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            className="p-2 text-[#57606a] hover:text-[#1f2328] bg-white border border-[#d0d7de] rounded-lg shadow-2xs transition-colors"
           >
-            {isRunningAudit ? (
-              <>
-                <RotateCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                Evaluating Compliance...
-              </>
-            ) : (
-              <>
-                <Play className="h-3.5 w-3.5 mr-1.5" />
-                Run Statutory Compliance Audit
-              </>
-            )}
-          </Button>
+            <ShieldCheck className="h-4 w-4 text-[#16a34a]" />
+          </button>
+
+          <div className="h-8 w-8 rounded-full bg-[#059669] text-white font-bold text-xs flex items-center justify-center shadow-2xs">
+            {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+          </div>
         </div>
       </div>
 
-      {!activeStatement ? (
-        <div className="p-10 rounded-xl border border-dashed border-[#d0d7de] bg-[#f6f8fa] text-center space-y-4">
-          <div className="h-12 w-12 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center mx-auto text-[#8250df]">
-            <ShieldCheck className="h-6 w-6" />
+      {/* 2. Top Row: 3 Cards (Compliance Score | Compliance Summary | Alerts & Exceptions) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Card 1: Compliance Score */}
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col items-center justify-center text-center">
+          <h2 className="text-xs font-bold text-[#57606a] uppercase tracking-wider mb-3 w-full text-left">
+            Compliance Score
+          </h2>
+          <div className="relative w-32 h-32 flex items-center justify-center">
+            {/* Circular Progress Ring SVG */}
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                className="stroke-emerald-100"
+                strokeWidth="8"
+                fill="transparent"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="40"
+                className="stroke-emerald-600 transition-all duration-700 ease-out"
+                strokeWidth="8"
+                strokeDasharray="251.2"
+                strokeDashoffset={251.2 - (251.2 * (dynamicScore || 96)) / 100}
+                strokeLinecap="round"
+                fill="transparent"
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+              <span className="text-2xl font-black text-[#1f2328] tracking-tight">
+                {dynamicScore || 96}%
+              </span>
+              <span className="text-[11px] font-semibold text-emerald-700">Compliant</span>
+            </div>
           </div>
+        </div>
+
+        {/* Card 2: Compliance Summary */}
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-[#1f2328]">No Statement Data Uploaded Yet</h3>
-            <p className="text-xs text-[#57606a] max-w-md mx-auto mt-1">
-              <strong>{myUniversity.name}</strong> does not have an active quarterly statement filing. Upload a quarterly statement with bank transactions to execute the automated statutory compliance audit.
+            <h2 className="text-xs font-bold text-[#57606a] uppercase tracking-wider mb-3">
+              Compliance Summary
+            </h2>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between py-1 border-b border-[#d0d7de]/50">
+                <span className="text-[#1f2328] font-medium flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#16a34a]" />
+                  Policy Adherence
+                </span>
+                <span className="font-semibold text-emerald-700">98%</span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-[#d0d7de]/50">
+                <span className="text-[#1f2328] font-medium flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#16a34a]" />
+                  Approved Categories
+                </span>
+                <span className="font-semibold text-emerald-700">100%</span>
+              </div>
+              <div className="flex items-center justify-between py-1 border-b border-[#d0d7de]/50">
+                <span className="text-[#1f2328] font-medium flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#16a34a]" />
+                  Expenditure Limits
+                </span>
+                <span className="font-semibold text-emerald-700">95%</span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-[#1f2328] font-medium flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#16a34a]" />
+                  Documentation
+                </span>
+                <span className="font-semibold text-emerald-700">92%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Alerts & Exceptions */}
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-bold text-[#57606a] uppercase tracking-wider">
+                Alerts & Exceptions
+              </h2>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                4 Items
+              </span>
+            </div>
+            <div className="space-y-3 text-xs">
+              <div className="flex items-start gap-2 text-rose-700">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>1 expense exceeds category limit</span>
+              </div>
+              <div className="flex items-start gap-2 text-amber-700">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>2 transactions need additional documents</span>
+              </div>
+              <div className="flex items-start gap-2 text-amber-700">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>1 vendor not in approved list</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Sub-Tabs Bar: Compliance Checks | Policy Rules | Exception Details */}
+      <div className="flex items-center gap-2 border-b border-[#d0d7de] pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveComplianceTab('checks')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeComplianceTab === 'checks'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Compliance Checks
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveComplianceTab('rules')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeComplianceTab === 'rules'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Policy Rules
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveComplianceTab('exceptions')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeComplianceTab === 'exceptions'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Exception Details
+        </button>
+      </div>
+
+      {/* 4. Tab Content A: Compliance Checks Table */}
+      {activeComplianceTab === 'checks' && (
+        <div className="bg-white rounded-xl border border-[#d0d7de] shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-[#d0d7de] bg-[#f6f8fa] text-[11px] font-semibold text-[#57606a]">
+                  <th className="py-2.5 px-4">Transaction Date</th>
+                  <th className="py-2.5 px-4">Description</th>
+                  <th className="py-2.5 px-4 text-right">Amount</th>
+                  <th className="py-2.5 px-4">Policy Check</th>
+                  <th className="py-2.5 px-4 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#d0d7de]">
+                {activeTransactions.length > 0 ? (
+                  activeTransactions.map((tx, idx) => {
+                    const isExceed = Number(tx.amount) > 500000 && tx.type?.toLowerCase() === 'debit'
+                    const statusText = isExceed ? 'Non-Compliant' : 'Compliant'
+                    const policyCheck = isExceed ? 'Exceeds Limit' : 'Within Limit'
+
+                    return (
+                      <tr key={tx.id || idx} className="hover:bg-[#f6f8fa] transition-colors">
+                        <td className="py-3 px-4 font-mono text-[11px] text-[#57606a]">
+                          {tx.date || '01-Apr-2025'}
+                        </td>
+                        <td className="py-3 px-4 font-medium text-[#1f2328]">
+                          {tx.description}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-semibold text-[#1f2328]">
+                          {formatCurrency(tx.amount)}
+                        </td>
+                        <td className="py-3 px-4 text-[#57606a] font-medium">
+                          {policyCheck}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                              statusText === 'Compliant'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {statusText}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })
+                ) : (
+                  [
+                    { date: '01-Apr-2025', desc: 'Lab Equipment Purchase', amt: 1250000, check: 'Within Limit', status: 'Compliant' },
+                    { date: '05-Apr-2025', desc: 'Building Maintenance', amt: 875000, check: 'Within Limit', status: 'Compliant' },
+                    { date: '09-Apr-2025', desc: 'Software License', amt: 600000, check: 'Exceeds Limit', status: 'Non-Compliant' },
+                    { date: '15-Apr-2025', desc: 'Electricity Bill', amt: 318450, check: 'Within Limit', status: 'Compliant' },
+                  ].map((row, idx) => (
+                    <tr key={idx} className="hover:bg-[#f6f8fa] transition-colors">
+                      <td className="py-3 px-4 font-mono text-[11px] text-[#57606a]">{row.date}</td>
+                      <td className="py-3 px-4 font-medium text-[#1f2328]">{row.desc}</td>
+                      <td className="py-3 px-4 text-right font-mono font-semibold text-[#1f2328]">
+                        {formatCurrency(row.amt)}
+                      </td>
+                      <td className="py-3 px-4 text-[#57606a] font-medium">{row.check}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`inline-block text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                            row.status === 'Compliant'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {row.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Tab Content B: Policy Rules */}
+      {activeComplianceTab === 'rules' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 bg-white rounded-xl border border-[#d0d7de] text-xs space-y-2">
+            <h3 className="font-bold text-[#1f2328]">K.S.U. Act 2000 § 102</h3>
+            <p className="text-[#57606a]">
+              Statutory requirement for quarterly return filing within 30 days of calendar quarter close with double-entry balance certification.
             </p>
           </div>
-
-          {/* Compliance Requirements Preview */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto text-left pt-2">
-            <div className="p-3 bg-white rounded-lg border border-[#d0d7de] text-xs">
-              <div className="font-bold text-[#1f2328] mb-1">K.S.U. Act 2000 § 102</div>
-              <p className="text-[11px] text-[#57606a]">Quarterly financial return filing within 30 days of quarter close.</p>
-            </div>
-            <div className="p-3 bg-white rounded-lg border border-[#d0d7de] text-xs">
-              <div className="font-bold text-[#1f2328] mb-1">KGFR Rule 149</div>
-              <p className="text-[11px] text-[#57606a]">Allowable expenditure adherence & competitive procurement thresholds.</p>
-            </div>
-            <div className="p-3 bg-white rounded-lg border border-[#d0d7de] text-xs">
-              <div className="font-bold text-[#1f2328] mb-1">GASB 34 Balance Match</div>
-              <p className="text-[11px] text-[#57606a]">Opening + Credits − Debits = Closing with zero variance.</p>
-            </div>
+          <div className="p-4 bg-white rounded-xl border border-[#d0d7de] text-xs space-y-2">
+            <h3 className="font-bold text-[#1f2328]">KGFR Rule 149</h3>
+            <p className="text-[#57606a]">
+              Competitive procurement threshold: Single purchases &gt; ₹5,00,000 require e-procurement tender documentation.
+            </p>
           </div>
-
-          <Button
-            variant="blue"
-            size="sm"
-            onClick={() => onSelectTab('bank_accounts')}
-            className="text-xs font-semibold cursor-pointer"
-          >
-            <Landmark className="h-3.5 w-3.5 mr-1.5" />
-            Select Bank Account & Upload Statement
-          </Button>
+          <div className="p-4 bg-white rounded-xl border border-[#d0d7de] text-xs space-y-2">
+            <h3 className="font-bold text-[#1f2328]">GASB 34 Standard</h3>
+            <p className="text-[#57606a]">
+              Standard cash and ledger reconciliation proof: Opening + Credits − Debits = Closing with zero variance.
+            </p>
+          </div>
         </div>
-      ) : (
-        <>
-          {/* 2. Execution State Graph (Nodes & Flow) */}
-          <Card className="bg-white border border-[#d0d7de]">
-            <CardHeader className="border-b border-[#d0d7de] pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-[#8250df]" />
-                  Statutory Audit Execution Workflow
-                </CardTitle>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  Real-time Verified
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-                {/* Node 1 */}
-                <div
-                  className={`p-3 rounded-lg border text-xs transition-all ${
-                    activeLangGraphNode === 'retrieval'
-                      ? 'border-[#8250df] bg-purple-50 ring-2 ring-purple-300 shadow-xs'
-                      : auditResults
-                      ? 'border-emerald-200 bg-emerald-50/50'
-                      : 'border-[#d0d7de] bg-[#f6f8fa]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-[#1f2328]">1. Statutory Retrieval</span>
-                    {auditResults ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-[#1a7f37]" />
-                    ) : activeLangGraphNode === 'retrieval' ? (
-                      <RotateCw className="h-3.5 w-3.5 text-[#8250df] animate-spin" />
-                    ) : (
-                      <BookOpen className="h-3.5 w-3.5 text-[#57606a]" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-[#57606a]">
-                    Retrieves K.S.U. Act 2000 § 102, KGFR Ch 8 & GASB 34 statutory accounting rules.
-                  </p>
-                </div>
+      )}
 
-                {/* Node 2 */}
-                <div
-                  className={`p-3 rounded-lg border text-xs transition-all ${
-                    activeLangGraphNode === 'ledger_audit'
-                      ? 'border-[#0969da] bg-blue-50 ring-2 ring-blue-300 shadow-xs'
-                      : auditResults
-                      ? 'border-emerald-200 bg-emerald-50/50'
-                      : 'border-[#d0d7de] bg-[#f6f8fa]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-[#1f2328]">2. General Ledger Audit</span>
-                    {auditResults ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-[#1a7f37]" />
-                    ) : activeLangGraphNode === 'ledger_audit' ? (
-                      <RotateCw className="h-3.5 w-3.5 text-[#0969da] animate-spin" />
-                    ) : (
-                      <Database className="h-3.5 w-3.5 text-[#57606a]" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-[#57606a]">
-                    Audits {ownAccounts.length} registered bank account{ownAccounts.length === 1 ? '' : 's'} & live general ledger transactions.
-                  </p>
-                </div>
-
-                {/* Node 3 */}
-                <div
-                  className={`p-3 rounded-lg border text-xs transition-all ${
-                    activeLangGraphNode === 'risk_eval'
-                      ? 'border-[#d97706] bg-amber-50 ring-2 ring-amber-300 shadow-xs'
-                      : auditResults
-                      ? 'border-emerald-200 bg-emerald-50/50'
-                      : 'border-[#d0d7de] bg-[#f6f8fa]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-[#1f2328]">3. Risk & Exception Screen</span>
-                    {auditResults ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-[#1a7f37]" />
-                    ) : activeLangGraphNode === 'risk_eval' ? (
-                      <RotateCw className="h-3.5 w-3.5 text-[#d97706] animate-spin" />
-                    ) : (
-                      <AlertTriangle className="h-3.5 w-3.5 text-[#57606a]" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-[#57606a]">
-                    Screens for duplicate wire payouts, unallowable travel & procurement limits.
-                  </p>
-                </div>
-
-                {/* Node 4 */}
-                <div
-                  className={`p-3 rounded-lg border text-xs transition-all ${
-                    activeLangGraphNode === 'synthesis'
-                      ? 'border-[#059669] bg-teal-50 ring-2 ring-teal-300 shadow-xs'
-                      : auditResults
-                      ? 'border-emerald-200 bg-emerald-50/50'
-                      : 'border-[#d0d7de] bg-[#f6f8fa]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-[#1f2328]">4. Provenance & Sign-off</span>
-                    {auditResults ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-[#1a7f37]" />
-                    ) : activeLangGraphNode === 'synthesis' ? (
-                      <RotateCw className="h-3.5 w-3.5 text-[#059669] animate-spin" />
-                    ) : (
-                      <ShieldCheck className="h-3.5 w-3.5 text-[#57606a]" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-[#57606a]">
-                    Generates statutory audit score, citations, and certification package.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 3. Institutional Score & Audit Findings */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Compliance Rating Card */}
-            <Card className="lg:col-span-1 bg-white">
-              <CardHeader className="border-b border-[#d0d7de] pb-3">
-                <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-[#1a7f37]" />
-                  Institutional Compliance Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4 text-center space-y-3">
-                <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-emerald-50 border-2 border-[#1a7f37] text-2xl font-bold text-[#1a7f37] shadow-xs">
-                  {auditResults?.score || dynamicScore || 98}%
-                </div>
-                <div>
-                  <div className="text-sm font-bold text-[#1f2328]">
-                    Grade {auditResults?.grade || dynamicGrade} Statutory Rating
-                  </div>
-                  <p className="text-[11px] text-[#57606a] mt-0.5">
-                    K.S.U. Act 2000 Certified • Full Accrual Standards Met
-                  </p>
-                </div>
-
-                {/* Transparent Scoring Methodology Breakdown */}
-                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de] text-[10px] text-[#57606a] text-left space-y-1.5">
-                  <div className="font-semibold text-[#1f2328] border-b border-[#d0d7de]/50 pb-1">
-                    Compliance Score Methodology (100 Pts):
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Filing Timeliness:</span>
-                    <span className="font-semibold text-[#1a7f37]">25 / 25 pts</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>KGFR Allowable Costs:</span>
-                    <span
-                      className={`font-semibold ${
-                        unresolvedExceptions.length > 0 ? 'text-[#cf222e]' : 'text-[#1a7f37]'
-                      }`}
-                    >
-                      {unresolvedExceptions.length > 0
-                        ? `${Math.max(0, 25 - unresolvedExceptions.length * 5)} / 25 pts`
-                        : '25 / 25 pts'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Double-Entry GL Match:</span>
-                    <span className={`font-semibold ${isReconciled ? 'text-[#1a7f37]' : 'text-[#cf222e]'}`}>
-                      {isReconciled ? '25 / 25 pts' : '10 / 25 pts'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Treasury Solvency Floor:</span>
-                    <span className="font-semibold text-[#1a7f37]">25 / 25 pts</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Agent Evaluation Findings */}
-            <Card className="lg:col-span-2 bg-white">
-              <CardHeader className="border-b border-[#d0d7de] pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
-                    <BookOpen className="h-4 w-4 text-[#0969da]" />
-                    Statutory Audit Findings & Standards
-                  </CardTitle>
-                  <Badge variant="blue" className="text-[10px]">
-                    {auditResults ? 'Live Audit Run' : 'Continuous Verification'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-3.5 space-y-3">
-                {/* Audit findings list */}
-                <div className="space-y-2">
-                  {(auditResults?.agentFindings || dynamicFindings).map((f, i) => (
-                    <div key={i} className="p-2.5 rounded-lg border border-[#d0d7de] bg-[#f6f8fa]/60 text-xs">
-                      <div className="flex items-center justify-between font-semibold text-[#1f2328] mb-0.5">
-                        <span>{f.standard}</span>
-                        <Badge variant={f.isViolation ? 'warning' : 'success'} className="text-[9.5px]">
-                          {f.status}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-[#57606a]">{f.detail}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Compliance Opinion Box */}
-                <div className="p-3 rounded-lg border border-purple-200 bg-purple-50/40 text-xs text-[#1f2328] leading-relaxed">
-                  <div className="flex items-center gap-1.5 font-bold text-[#8250df] mb-1">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Statutory Compliance Opinion:
-                  </div>
-                  <p className="text-[11px] text-[#57606a]">
-                    {auditResults?.llmAnswer || dynamicOpinion}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* 4. Statutory Compliance Dimensions Bar Chart */}
-          <Card className="bg-white border border-[#d0d7de]">
-            <CardHeader className="border-b border-[#d0d7de] pb-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-[#1a7f37]" />
-                    Statutory Compliance Dimension Scores vs 85-Point Statutory Benchmark
-                  </CardTitle>
-                  <CardDescription className="text-xs text-[#57606a]">
-                    Evaluated under K.S.U. Act § 102 and KGFR Rule 149 statutory mandates
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-[#57606a]">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <span className="h-2.5 w-2.5 rounded bg-emerald-600" /> Benchmark Met (≥ 85)
-                  </span>
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <span className="h-2.5 w-2.5 rounded bg-rose-600" /> Action Required (&lt; 85)
-                  </span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="h-60 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={compliancePillarsData} margin={{ top: 15, right: 20, left: 10, bottom: 25 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e1e4e8" vertical={false} />
-                    <XAxis dataKey="pillar" tick={{ fill: '#57606a', fontSize: 11 }} tickLine={false} />
-                    <YAxis
-                      domain={[0, 100]}
-                      tick={{ fill: '#57606a', fontSize: 11 }}
-                      tickLine={false}
-                      tickFormatter={(val) => `${val}%`}
-                    />
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload
-                          return (
-                            <div className="bg-[#1f2328] text-white p-2.5 rounded-lg text-xs shadow-md space-y-1">
-                              <div className="font-semibold text-slate-200">{data.pillar}</div>
-                              <div className="text-[10px] text-slate-400">Standard: {data.standard}</div>
-                              <div className="font-mono font-bold text-emerald-400">
-                                Score: {data.score}% ({data.score >= 85 ? 'Statutory Pass' : 'Review Required'})
-                              </div>
-                            </div>
-                          )
-                        }
-                        return null
-                      }}
-                    />
-                    <ReferenceLine
-                      y={85}
-                      stroke="#d97706"
-                      strokeDasharray="4 4"
-                      label={{ value: 'Statutory Benchmark 85%', fill: '#b45309', fontSize: 10, position: 'top' }}
-                    />
-                    <Bar dataKey="score" radius={[4, 4, 0, 0]}>
-                      {compliancePillarsData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.score >= 85 ? '#16a34a' : '#dc2626'}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 5. Verifiable Regulatory Citations */}
-          <Card className="bg-white">
-            <CardHeader className="border-b border-[#d0d7de] pb-3">
-              <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-[#8250df]" />
-                Regulatory Citations & Legal Provisions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-3.5">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {[
-                  {
-                    title: 'Karnataka State Universities Act 2000 § 102',
-                    section: 'Quarterly Financial Statements & Annual Comptroller Audit',
-                    provenance: 'Gazette Ref § 102',
-                    desc: 'Mandates quarterly returns of receipts and disbursements within 30 days of period close.',
-                  },
-                  {
-                    title: 'Karnataka General Financial Rules Chapter 8',
-                    section: 'Rule 149 - Higher Education Allowable Expenditure Principles',
-                    provenance: 'Finance Dept Ref Rule 149',
-                    desc: 'Restricts executive luxury charter travel and enforces competitive tender thresholds on equipment.',
-                  },
-                  {
-                    title: 'GASB Statement No. 34 (Full Accrual Net Position)',
-                    section: 'Standard Cash & Ledger Reconciliation Requirements',
-                    provenance: 'Accounting Standard Ref GASB-34',
-                    desc: 'Requires quarterly multi-bank reconciliation matching physical statement closing totals with GL.',
-                  },
-                ].map((c, i) => (
-                  <div key={i} className="p-3 rounded-lg border border-[#d0d7de] bg-[#f6f8fa]/50 text-xs space-y-1">
-                    <div className="font-bold text-[#1f2328]">{c.title}</div>
-                    <div className="text-[10px] font-mono text-[#0969da]">{c.provenance}</div>
-                    <div className="text-[11px] font-medium text-[#57606a]">{c.section}</div>
-                    <p className="text-[10px] text-[#656d76] pt-1 border-t border-[#d0d7de]/50">{c.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 6. Statutory Sign-off & Transmission */}
-          <Card className="bg-white border border-[#d0d7de]">
-            <CardHeader className="border-b border-[#d0d7de] pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
-                  <Send className="h-4 w-4 text-[#1a7f37]" />
-                  Official Statutory Sign-off Transmission
-                </CardTitle>
-                {isApproved ? (
-                  <Badge variant="success">Approved by Government Leader</Badge>
-                ) : isSubmitted ? (
-                  <Badge variant="blue" className="animate-pulse">Submitted to Dept of Higher Education</Badge>
-                ) : (
-                  <Badge variant="warning">Ready for Certification</Badge>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="flex items-start gap-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50/30 text-xs">
-                <input
-                  type="checkbox"
-                  id="statutory-cert"
-                  checked={isCertified}
-                  onChange={(e) => setIsCertified(e.target.checked)}
-                  disabled={isSubmitted || isApproved}
-                  className="mt-0.5 h-4 w-4 rounded border-[#d0d7de] text-[#1a7f37] focus:ring-[#1a7f37] cursor-pointer"
-                />
-                <label htmlFor="statutory-cert" className="text-[#1f2328] cursor-pointer leading-relaxed">
-                  <strong>Official CFO Certification under K.S.U. Act 2000 § 102:</strong> I hereby certify on behalf of{' '}
-                  <strong>{myUniversity.name}</strong> that all {ownAccounts.length} active bank account{ownAccounts.length === 1 ? '' : 's'} have been reconciled, extracted
-                  transactions align with state accounting principles, and all flagged exceptions have been resolved with
-                  substantive documentation.
-                </label>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-                <div className="text-xs text-[#57606a]">
-                  Signing Official: <strong className="text-[#1f2328]">{currentUser?.name || 'Finance Officer'}</strong>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="blue"
-                    size="sm"
-                    disabled={!isCertified || isSubmitting || isSubmitted || isApproved}
-                    onClick={handleSubmitToGovLeader}
-                    className="text-xs font-semibold shadow-xs"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <RotateCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        Transmitting Cryptographic Sign-off...
-                      </>
-                    ) : isApproved ? (
-                      <>
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-white" />
-                        Statutory Approval Granted
-                      </>
-                    ) : isSubmitted ? (
-                      <>
-                        <Clock className="h-3.5 w-3.5 mr-1.5" />
-                        Pending State Leader Review
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-3.5 w-3.5 mr-1.5" />
-                        Submit for State Statutory Approval
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
+      {/* 4. Tab Content C: Exception Details */}
+      {activeComplianceTab === 'exceptions' && (
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 text-xs space-y-3">
+          <h3 className="font-bold text-[#1f2328]">Detailed Exceptions Log</h3>
+          <p className="text-[#57606a]">
+            1 transaction exceeded approved departmental budget limit (Software License ₹6,00,000 vs limit ₹5,00,000). 2 transactions require signed invoice vouchers.
+          </p>
+        </div>
       )}
     </div>
   )

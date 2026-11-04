@@ -216,6 +216,9 @@ export function UnivReportsView({ onSelectTab, onTriggerToast }) {
 
   // Certified Report Modal State
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
+  const [activeReportSubTab, setActiveReportSubTab] = useState('generate') // 'generate', 'history'
+  const [selectedReportType, setSelectedReportType] = useState('Financial Summary Report')
+  const [selectedReportPeriod, setSelectedReportPeriod] = useState('Apr 2025 - Mar 2026')
 
   // Report export handler
   const handleExportCSV = () => {
@@ -266,561 +269,304 @@ export function UnivReportsView({ onSelectTab, onTriggerToast }) {
   }
 
   return (
-    <div className="space-y-5 pb-12 text-[#1f2328]">
-      {/* 1. Header Bar */}
-      <div className="rounded-lg border border-[#d0d7de] bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-2xs">
+    <div className="space-y-6">
+      {/* 1. Top Header Row: Report title + FY Dropdown */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
         <div>
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-[#0969da]" />
-            <h1 className="text-base font-bold text-[#1f2328]">Financial & Statement Reports</h1>
-            <Badge variant="blue" className="text-[10px] font-mono">
-              {myUniversity.code}
-            </Badge>
-          </div>
+          <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">Report</h1>
           <p className="text-xs text-[#57606a] mt-0.5">
-            {myUniversity.name} • Certified statement extractions, credits & debits, and AI audit compliance.
+            Generate, view and download financial reports
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCSV}
-            disabled={allTransactions.length === 0}
-            className="text-xs"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            Export CSV
-          </Button>
-          <Button
-            variant="blue"
-            size="sm"
-            onClick={() => setIsReportModalOpen(true)}
-            disabled={allTransactions.length === 0}
-            className="text-xs font-semibold"
-          >
-            <Printer className="h-3.5 w-3.5 mr-1.5" />
-            Generate Certified Report
-          </Button>
-        </div>
-      </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <select
+              className="text-xs font-semibold bg-white border border-[#d0d7de] rounded-lg px-3 py-1.5 pr-7 text-[#1f2328] appearance-none focus:outline-none focus:border-[#16a34a] cursor-pointer shadow-2xs"
+            >
+              <option value="FY 2025 - 2026">FY 2025 - 2026</option>
+              <option value="FY 2024 - 2025">FY 2024 - 2025</option>
+            </select>
+          </div>
 
-      {/* 2. Bank Account Selector */}
-      <div className="rounded-lg border border-[#d0d7de] bg-white p-3 shadow-2xs space-y-2">
-        <div className="flex items-center justify-between text-xs font-semibold text-[#57606a]">
-          <span className="flex items-center gap-1.5">
-            <Landmark className="h-3.5 w-3.5 text-[#0969da]" />
-            Select Bank Account
-          </span>
-          <span className="text-[11px] font-mono">
-            {ownAccounts.length} Registered Account{ownAccounts.length === 1 ? '' : 's'}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setSelectedAccountId('ALL')}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer border ${
-              selectedAccountId === 'ALL'
-                ? 'bg-[#0969da] text-white border-[#0969da]'
-                : 'bg-[#f6f8fa] text-[#1f2328] border-[#d0d7de] hover:bg-[#eaeef2]'
-            }`}
+            type="button"
+            className="p-2 text-[#57606a] hover:text-[#1f2328] bg-white border border-[#d0d7de] rounded-lg shadow-2xs transition-colors"
           >
-            All Accounts ({ownAccounts.length})
+            <FileSpreadsheet className="h-4 w-4 text-[#16a34a]" />
           </button>
 
-          {ownAccounts.map((acc) => {
-            const isSelected = selectedAccountId === acc.id
-            return (
-              <button
-                key={acc.id}
-                onClick={() => setSelectedAccountId(acc.id)}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer border flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-[#0969da] text-white border-[#0969da]'
-                    : 'bg-[#f6f8fa] text-[#1f2328] border-[#d0d7de] hover:bg-[#eaeef2]'
-                }`}
-              >
-                <Landmark className="h-3 w-3" />
-                <span>{acc.bankName}</span>
-                <span className="font-mono text-[10px] opacity-80">
-                  (•{acc.accountNumber.slice(-4)})
-                </span>
-                <span className="font-mono text-[10px] font-bold">
-                  {formatCurrency(Number(acc.currentBalance) || 0)}
-                </span>
-              </button>
-            )
-          })}
+          <div className="h-8 w-8 rounded-full bg-[#059669] text-white font-bold text-xs flex items-center justify-center shadow-2xs">
+            {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+          </div>
         </div>
       </div>
 
-      {/* Empty State when no statements or transactions */}
-      {allTransactions.length === 0 ? (
-        <div className="p-10 rounded-lg border border-dashed border-[#d0d7de] bg-[#f6f8fa] text-center space-y-3">
-          <FileSpreadsheet className="h-10 w-10 text-[#57606a] mx-auto opacity-50" />
+      {/* 2. Sub-Tabs Bar: Generate Report | Report History */}
+      <div className="flex items-center gap-2 border-b border-[#d0d7de] pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveReportSubTab('generate')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeReportSubTab === 'generate'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Generate Report
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveReportSubTab('history')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeReportSubTab === 'history'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Report History
+        </button>
+      </div>
+
+      {/* 3. Main Row: Generate Report Card (Left) & Available Reports Table (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left Column: Generate Report Form */}
+        <div className="lg:col-span-5 bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-[#1f2328]">No Statement Uploaded Yet</h3>
-            <p className="text-xs text-[#57606a] max-w-md mx-auto mt-1">
-              Select a bank account and upload a quarterly statement PDF/CSV to extract all transactions, credits, and debits with AI compliance.
-            </p>
+            <h2 className="text-sm font-bold text-[#1f2328] pb-3 border-b border-[#d0d7de]">
+              Generate Report
+            </h2>
+
+            <div className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#57606a] mb-1.5">
+                  Select Report Type
+                </label>
+                <select
+                  value={selectedReportType}
+                  onChange={(e) => setSelectedReportType(e.target.value)}
+                  className="w-full text-xs bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-3 py-2 text-[#1f2328] focus:outline-none focus:border-[#16a34a]"
+                >
+                  <option value="Financial Summary Report">Financial Summary Report</option>
+                  <option value="Expenditure Analysis">Expenditure Analysis</option>
+                  <option value="Compliance Report">Compliance Report</option>
+                  <option value="AI Insights Report">AI Insights Report</option>
+                  <option value="Statutory Form 19-A">Statutory Form 19-A</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-[#57606a] mb-1.5">
+                  Period
+                </label>
+                <select
+                  value={selectedReportPeriod}
+                  onChange={(e) => setSelectedReportPeriod(e.target.value)}
+                  className="w-full text-xs bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-3 py-2 text-[#1f2328] focus:outline-none focus:border-[#16a34a]"
+                >
+                  <option value="Apr 2025 - Mar 2026">Apr 2025 - Mar 2026</option>
+                  <option value="FY 2025 - 2026">FY 2025 - 2026</option>
+                  <option value="Apr 2025 - Jun 2025">Apr 2025 - Jun 2025</option>
+                  <option value="Jul 2025 - Sep 2025">Jul 2025 - Sep 2025</option>
+                  <option value="Oct 2025 - Dec 2025">Oct 2025 - Dec 2025</option>
+                  <option value="Jan 2026 - Mar 2026">Jan 2026 - Mar 2026</option>
+                </select>
+              </div>
+
+              <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de] text-[11px] text-[#57606a] space-y-1">
+                <div>• Institution: <strong>{myUniversity.name}</strong></div>
+                <div>• Format: Statutory PDF / CSV with Karnataka Government Seal</div>
+                <div>• Integrity: AI Reconciled with K.S.U. Act 2000</div>
+              </div>
+            </div>
           </div>
-          <Button
-            variant="blue"
-            size="sm"
-            onClick={() => onSelectTab && onSelectTab('bank_accounts')}
-            className="text-xs font-semibold cursor-pointer"
-          >
-            <Landmark className="h-3.5 w-3.5 mr-1.5" />
-            Upload Statement in Bank Accounts
-          </Button>
+
+          <div className="mt-5 pt-3 border-t border-[#d0d7de]">
+            <Button
+              variant="blue"
+              size="sm"
+              onClick={() => {
+                setIsReportModalOpen(true)
+                if (onTriggerToast) {
+                  onTriggerToast('Report Generated', `Compiled ${selectedReportType} for ${selectedReportPeriod}.`)
+                }
+              }}
+              className="w-full text-xs font-semibold bg-[#16a34a] hover:bg-[#15803d] text-white border-none cursor-pointer"
+            >
+              Generate Report
+            </Button>
+          </div>
         </div>
-      ) : (
-        <>
-          {/* 3. Financial Summary Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3.5 rounded-lg border border-[#d0d7de] bg-white shadow-2xs">
-              <span className="text-[11px] font-semibold text-[#57606a] block uppercase tracking-wider">
-                Opening Balance
-              </span>
-              <span className="text-lg font-bold font-mono text-[#1f2328] mt-1 block">
-                {formatCurrency(openingBalance)}
-              </span>
+
+        {/* Right Column: Available Reports Table */}
+        <div className="lg:col-span-7 bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-[#d0d7de]">
+              <h2 className="text-sm font-bold text-[#1f2328]">Available Reports</h2>
+              <Badge variant="outline" className="text-xs font-semibold text-[#57606a]">
+                4 Reports
+              </Badge>
             </div>
 
-            <div className="p-3.5 rounded-lg border border-[#1a7f37]/30 bg-[#dafbe1]/30 shadow-2xs">
-              <span className="text-[11px] font-semibold text-[#1a7f37] block uppercase tracking-wider">
-                Total Credits (Inflows)
-              </span>
-              <span className="text-lg font-bold font-mono text-[#1a7f37] mt-1 block">
-                +{formatCurrency(totalCredits)}
-              </span>
-              <span className="text-[10px] text-[#1a7f37] block mt-0.5">
-                {creditTxs.length} Credit Entries
-              </span>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-[#cf222e]/30 bg-[#ffebe9]/30 shadow-2xs">
-              <span className="text-[11px] font-semibold text-[#cf222e] block uppercase tracking-wider">
-                Total Debits (Disbursements)
-              </span>
-              <span className="text-lg font-bold font-mono text-[#cf222e] mt-1 block">
-                -{formatCurrency(totalDebits)}
-              </span>
-              <span className="text-[10px] text-[#cf222e] block mt-0.5">
-                {debitTxs.length} Debit Entries
-              </span>
-            </div>
-
-            <div className="p-3.5 rounded-lg border border-[#0969da]/30 bg-[#ddf4ff]/30 shadow-2xs">
-              <span className="text-[11px] font-semibold text-[#0969da] block uppercase tracking-wider">
-                Reconciled Closing Balance
-              </span>
-              <span className="text-lg font-bold font-mono text-[#0969da] mt-1 block">
-                {formatCurrency(closingBalance)}
-              </span>
-              <span className="text-[10px] text-[#0969da] block mt-0.5">
-                Net Flow: {netInflow >= 0 ? `+${formatCurrency(netInflow)}` : formatCurrency(netInflow)}
-              </span>
-            </div>
-          </div>
-
-          {/* 4. AI Compliance & AI Instance Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* AI Compliance Card */}
-            <div className="rounded-lg border border-[#d0d7de] bg-white p-4 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between border-b border-[#eaeef2] pb-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-[#1a7f37]" />
-                  <h3 className="text-xs font-bold text-[#1f2328] uppercase tracking-wider">
-                    AI Statutory Compliance
-                  </h3>
-                </div>
-                <Badge variant={reconciliationMatch ? 'success' : 'danger'} className="text-[10px]">
-                  {reconciliationMatch ? 'Reconciliation Certified' : 'Variance Detected'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de]">
-                  <span className="text-[10px] text-[#57606a] block">AI Confidence Score</span>
-                  <span className="text-base font-bold font-mono text-[#1a7f37]">
-                    {aiConfidence}%
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de]">
-                  <span className="text-[10px] text-[#57606a] block">Reconciliation Variance</span>
-                  <span className="text-base font-bold font-mono text-[#1a7f37]">
-                    ₹{varianceAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de]">
-                  <span className="text-[10px] text-[#57606a] block">Statutory Allowable</span>
-                  <span className="text-xs font-bold text-[#1f2328]">
-                    {exceptionTxs.length === 0 ? '100% Allowable' : `${allTransactions.length - exceptionTxs.length}/${allTransactions.length} Allowable`}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded bg-[#f6f8fa] border border-[#d0d7de]">
-                  <span className="text-[10px] text-[#57606a] block">Audit Exceptions</span>
-                  <span className={`text-xs font-bold ${exceptionTxs.length === 0 ? 'text-[#1a7f37]' : 'text-[#cf222e]'}`}>
-                    {exceptionTxs.length === 0 ? '0 Exceptions' : `${exceptionTxs.length} Flagged`}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* AI Instance Card */}
-            <div className="rounded-lg border border-[#d0d7de] bg-white p-4 shadow-2xs space-y-3">
-              <div className="flex items-center justify-between border-b border-[#eaeef2] pb-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-[#0969da]" />
-                  <h3 className="text-xs font-bold text-[#1f2328] uppercase tracking-wider">
-                    AI Audit Instance Summary
-                  </h3>
-                </div>
-                <span className="text-[10px] font-mono text-[#57606a]">
-                  Engine: FinBot v2.4
-                </span>
-              </div>
-
-              <div className="p-2.5 rounded bg-[#ddf4ff]/20 border border-[#0969da]/20 text-xs text-[#1f2328] leading-relaxed">
-                {aiSummary}
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] font-mono text-[#57606a] pt-1">
-                <span>Verified: {activeStatement?.uploadedAt || 'Current'}</span>
-                <span>KSU Act §48 Certified</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 5. Complete Extracted Transactions Ledger */}
-          <div className="rounded-lg border border-[#d0d7de] bg-white shadow-2xs overflow-hidden">
-            {/* Header & Filter Controls */}
-            <div className="p-3.5 border-b border-[#d0d7de] bg-[#f6f8fa] flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-[#1f2328] uppercase tracking-wider">
-                  Extracted Statement Transactions ({allTransactions.length})
-                </span>
-                {currentAccount && (
-                  <Badge variant="outline" className="text-[10px] font-mono">
-                    {currentAccount.bankName} • {currentAccount.accountNumber}
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-[#57606a]" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search ref, desc, category..."
-                    className="h-7 pl-8 pr-2.5 rounded text-xs border border-[#d0d7de] bg-white text-[#1f2328] focus:border-[#0969da] focus:outline-none w-48"
-                  />
-                </div>
-
-                {/* Filter Tabs */}
-                <div className="flex items-center border border-[#d0d7de] rounded overflow-hidden bg-white text-xs">
-                  <button
-                    onClick={() => setTxTab('ALL')}
-                    className={`px-2.5 py-1 font-semibold cursor-pointer ${
-                      txTab === 'ALL' ? 'bg-[#0969da] text-white' : 'text-[#57606a] hover:bg-[#f6f8fa]'
-                    }`}
-                  >
-                    All ({allTransactions.length})
-                  </button>
-                  <button
-                    onClick={() => setTxTab('CREDIT')}
-                    className={`px-2.5 py-1 font-semibold cursor-pointer border-l border-[#d0d7de] ${
-                      txTab === 'CREDIT' ? 'bg-[#1a7f37] text-white' : 'text-[#1a7f37] hover:bg-[#f6f8fa]'
-                    }`}
-                  >
-                    Credits ({creditTxs.length})
-                  </button>
-                  <button
-                    onClick={() => setTxTab('DEBIT')}
-                    className={`px-2.5 py-1 font-semibold cursor-pointer border-l border-[#d0d7de] ${
-                      txTab === 'DEBIT' ? 'bg-[#cf222e] text-white' : 'text-[#cf222e] hover:bg-[#f6f8fa]'
-                    }`}
-                  >
-                    Debits ({debitTxs.length})
-                  </button>
-                  {exceptionTxs.length > 0 && (
-                    <button
-                      onClick={() => setTxTab('EXCEPTION')}
-                      className={`px-2.5 py-1 font-semibold cursor-pointer border-l border-[#d0d7de] ${
-                        txTab === 'EXCEPTION' ? 'bg-[#9a6700] text-white' : 'text-[#9a6700] hover:bg-[#f6f8fa]'
-                      }`}
-                    >
-                      Exceptions ({exceptionTxs.length})
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
+            <div className="mt-3 overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[11px] font-semibold text-[#57606a]">
-                  <tr>
-                    <th className="py-2.5 px-3">Date</th>
-                    <th className="py-2.5 px-3">Reference / UTR #</th>
-                    <th className="py-2.5 px-3">Description / Entity</th>
-                    <th className="py-2.5 px-3">Category</th>
-                    <th className="py-2.5 px-3 text-right">Credit (+₹)</th>
-                    <th className="py-2.5 px-3 text-right">Debit (-₹)</th>
-                    <th className="py-2.5 px-3 text-right">Resulting Balance (₹)</th>
-                    <th className="py-2.5 px-3 text-center">AI Verification</th>
+                <thead>
+                  <tr className="border-b border-[#d0d7de] bg-[#f6f8fa] text-[11px] font-semibold text-[#57606a]">
+                    <th className="py-2.5 px-3">Report Name</th>
+                    <th className="py-2.5 px-3">Period</th>
+                    <th className="py-2.5 px-3">Generated On</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#d0d7de]">
-                  {displayedTransactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-[#57606a]">
-                        No transactions found matching the filter criteria.
+                  {[
+                    { name: 'Annual Financial Summary', period: 'FY 2025 - 2026', date: '03 Jul 2025' },
+                    { name: 'Expenditure Analysis', period: 'Apr 2025 - Jun 2025', date: '03 Jul 2025' },
+                    { name: 'Compliance Report', period: 'Apr 2025 - Jun 2025', date: '02 Jul 2025' },
+                    { name: 'AI Insights Report', period: 'Apr 2025 - Jun 2025', date: '02 Jul 2025' },
+                  ].map((rpt, idx) => (
+                    <tr key={idx} className="hover:bg-[#f6f8fa] transition-colors">
+                      <td className="py-3 px-3 font-semibold text-[#1f2328]">
+                        <div className="flex items-center gap-2">
+                          <FileSpreadsheet className="h-4 w-4 text-[#16a34a] shrink-0" />
+                          <span>{rpt.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-[#57606a]">{rpt.period}</td>
+                      <td className="py-3 px-3 text-[#57606a] font-mono text-[11px]">{rpt.date}</td>
+                      <td className="py-3 px-3 text-right">
+                        <div className="flex items-center justify-end gap-2 text-[#57606a]">
+                          <button
+                            type="button"
+                            title="View Report Details"
+                            onClick={() => setIsReportModalOpen(true)}
+                            className="p-1 hover:text-[#0969da] hover:bg-blue-50 rounded transition-colors"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Download Report CSV/PDF"
+                            onClick={handleExportCSV}
+                            className="p-1 hover:text-[#16a34a] hover:bg-emerald-50 rounded transition-colors"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ) : (
-                    displayedTransactions.map((tx, idx) => {
-                      const isCredit =
-                        (tx.type && tx.type.toUpperCase().includes('CREDIT')) ||
-                        (tx.type && tx.type.toUpperCase() === 'CR')
-                      const isDebit = !isCredit
-
-                      return (
-                        <tr key={tx.id || idx} className="hover:bg-[#f6f8fa]/60 transition-colors">
-                          <td className="py-2.5 px-3 font-mono text-[#57606a] whitespace-nowrap">
-                            {tx.date || '—'}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono text-[#1f2328] font-medium whitespace-nowrap">
-                            {tx.referenceNo || '—'}
-                          </td>
-                          <td className="py-2.5 px-3 font-medium text-[#1f2328] max-w-xs truncate">
-                            {tx.description || '—'}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="px-1.5 py-0.5 rounded bg-[#eaeef2] text-[10px] font-medium text-[#1f2328] whitespace-nowrap">
-                              {tx.category || (isCredit ? 'Receipt & Inflow' : 'Disbursement')}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1a7f37] whitespace-nowrap">
-                            {isCredit ? `+${formatCurrency(Number(tx.amount) || 0)}` : '—'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-[#cf222e] whitespace-nowrap">
-                            {isDebit ? `-${formatCurrency(Number(tx.amount) || 0)}` : '—'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-medium text-[#57606a] whitespace-nowrap">
-                            {tx.balance !== undefined ? formatCurrency(Number(tx.balance)) : '—'}
-                          </td>
-                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                            <Badge
-                              variant={tx.status === 'Exception' ? 'danger' : 'success'}
-                              className="text-[10px]"
-                            >
-                              {tx.status || 'Validated'}
-                            </Badge>
-                          </td>
-                        </tr>
-                      )
-                    })
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
-
-            {/* Table Footer Summary */}
-            <div className="p-3 bg-[#f6f8fa] border-t border-[#d0d7de] flex flex-col sm:flex-row items-center justify-between text-xs font-semibold text-[#1f2328] gap-2">
-              <span className="text-[#57606a]">
-                Showing {displayedTransactions.length} of {allTransactions.length} transaction records
-              </span>
-              <div className="flex items-center gap-4 font-mono">
-                <span className="text-[#1a7f37]">Credits: +{formatCurrency(totalCredits)}</span>
-                <span className="text-[#cf222e]">Debits: -{formatCurrency(totalDebits)}</span>
-                <span className="text-[#0969da]">Closing: {formatCurrency(closingBalance)}</span>
-              </div>
-            </div>
           </div>
-        </>
-      )}
+        </div>
+      </div>
 
-      {/* 6. Certified Official Report Modal */}
+      {/* 4. Certified Report Modal (Preview with exact dynamic numbers) */}
       {isReportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-[2px] animate-in fade-in duration-150">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-lg border border-[#d0d7de] bg-white p-6 text-[#1f2328] shadow-2xl animate-in zoom-in-95 duration-150 space-y-5">
-            {/* Modal Actions */}
-            <div className="flex items-center justify-between border-b border-[#d0d7de] pb-3 print:hidden">
+        <Modal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          title={`Certified Statutory Financial Report — ${selectedReportType}`}
+          size="xl"
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <span className="text-[11px] text-[#57606a]">
+                Karnataka State Universities Act 2000 § 102 Compliant
+              </span>
               <div className="flex items-center gap-2">
-                <FileCheck2 className="h-5 w-5 text-[#1a7f37]" />
-                <h2 className="text-sm font-bold text-[#1f2328]">
-                  Official Statutory Financial Report
-                </h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleExportCSV} className="text-xs">
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  CSV
+                <Button variant="outline" size="sm" onClick={() => setIsReportModalOpen(false)}>
+                  Close
                 </Button>
-                <Button variant="blue" size="sm" onClick={handlePrintReport} className="text-xs">
-                  <Printer className="h-3.5 w-3.5 mr-1" />
-                  Print / Save PDF
-                </Button>
-                <button
-                  onClick={() => setIsReportModalOpen(false)}
-                  className="p-1 rounded text-[#57606a] hover:bg-[#eaeef2] hover:text-[#1f2328]"
+                <Button
+                  variant="blue"
+                  size="sm"
+                  onClick={handleExportCSV}
+                  className="bg-[#16a34a] hover:bg-[#15803d] text-white border-none"
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  <Download className="h-3.5 w-3.5 mr-1" />
+                  Download Report (CSV)
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-[#14532d]">{myUniversity.name}</h3>
+                <div className="text-[11px] text-[#16a34a] mt-0.5">
+                  Institution Code: {myUniversity.code} • Period: {selectedReportPeriod}
+                </div>
+              </div>
+              <Badge variant="success" className="text-xs">
+                AI Certified Clean
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-white border border-[#d0d7de] rounded-lg">
+                <span className="text-[10px] text-[#57606a] block uppercase">Opening Balance</span>
+                <span className="font-mono font-bold text-sm text-[#1f2328]">
+                  {formatCurrency(openingBalance)}
+                </span>
+              </div>
+              <div className="p-3 bg-white border border-[#d0d7de] rounded-lg">
+                <span className="text-[10px] text-[#16a34a] block uppercase">Total Credits</span>
+                <span className="font-mono font-bold text-sm text-[#16a34a]">
+                  +{formatCurrency(totalCredits)}
+                </span>
+              </div>
+              <div className="p-3 bg-white border border-[#d0d7de] rounded-lg">
+                <span className="text-[10px] text-[#cf222e] block uppercase">Total Debits</span>
+                <span className="font-mono font-bold text-sm text-[#cf222e]">
+                  -{formatCurrency(totalDebits)}
+                </span>
+              </div>
+              <div className="p-3 bg-white border border-[#d0d7de] rounded-lg">
+                <span className="text-[10px] text-[#0969da] block uppercase">Closing Balance</span>
+                <span className="font-mono font-bold text-sm text-[#0969da]">
+                  {formatCurrency(closingBalance)}
+                </span>
               </div>
             </div>
 
-            {/* Official Report Content (Printable Layout) */}
-            <div className="space-y-5 p-2">
-              <div className="text-center border-b border-[#d0d7de] pb-4 space-y-1">
-                <div className="text-xs font-bold text-[#57606a] uppercase tracking-wider">
-                  Government of Karnataka • Department of Higher Education
-                </div>
-                <h1 className="text-lg font-bold text-[#1f2328]">
-                  CERTIFIED INSTITUTIONAL FINANCIAL & STATEMENT AUDIT REPORT
-                </h1>
-                <div className="text-xs text-[#57606a]">
-                  Institution: <strong>{myUniversity.name}</strong> ({myUniversity.code}) • Generated on{' '}
-                  {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </div>
-              </div>
-
-              {/* Account & Audit Overview */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="p-2.5 rounded border border-[#d0d7de] bg-[#f6f8fa]">
-                  <span className="text-[10px] text-[#57606a] block">Bank Account</span>
-                  <span className="font-semibold text-[#1f2328] block">
-                    {currentAccount ? currentAccount.bankName : 'All Registered Accounts'}
-                  </span>
-                  <span className="font-mono text-[10px] text-[#57606a]">
-                    {currentAccount ? currentAccount.accountNumber : `${ownAccounts.length} Accounts`}
-                  </span>
-                </div>
-                <div className="p-2.5 rounded border border-[#d0d7de] bg-[#f6f8fa]">
-                  <span className="text-[10px] text-[#57606a] block">Period / Quarter</span>
-                  <span className="font-semibold text-[#1f2328] block">
-                    {activeStatement?.quarter || 'Q3 FY26'}
-                  </span>
-                  <span className="font-mono text-[10px] text-[#57606a]">FY 2025-2026</span>
-                </div>
-                <div className="p-2.5 rounded border border-[#d0d7de] bg-[#f6f8fa]">
-                  <span className="text-[10px] text-[#57606a] block">AI Reconciliation</span>
-                  <span className="font-semibold text-[#1a7f37] block">
-                    {reconciliationMatch ? 'Zero Variance Certified' : 'Variance Flagged'}
-                  </span>
-                  <span className="font-mono text-[10px] text-[#57606a]">Confidence: {aiConfidence}%</span>
-                </div>
-                <div className="p-2.5 rounded border border-[#d0d7de] bg-[#f6f8fa]">
-                  <span className="text-[10px] text-[#57606a] block">Statutory Status</span>
-                  <span className="font-semibold text-[#1f2328] block">KGFR & KSU Act §48</span>
-                  <span className="font-mono text-[10px] text-[#57606a]">Allowable: 100%</span>
-                </div>
-              </div>
-
-              {/* Summary Balances */}
-              <div className="overflow-x-auto border border-[#d0d7de] rounded-lg">
+            <div>
+              <h4 className="font-bold text-[#1f2328] mb-2">Verified Ledger Entries ({allTransactions.length} items)</h4>
+              <div className="max-h-60 overflow-y-auto border border-[#d0d7de] rounded-lg">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[11px] font-semibold text-[#57606a]">
+                  <thead className="bg-[#f6f8fa] sticky top-0 border-b border-[#d0d7de] text-[10px] uppercase text-[#57606a]">
                     <tr>
-                      <th className="py-2 px-3">Opening Balance</th>
-                      <th className="py-2 px-3 text-right">Total Credits (Inflows)</th>
-                      <th className="py-2 px-3 text-right">Total Debits (Outflows)</th>
-                      <th className="py-2 px-3 text-right">Net Flow</th>
-                      <th className="py-2 px-3 text-right">Reconciled Closing Balance</th>
+                      <th className="py-2 px-3">Date</th>
+                      <th className="py-2 px-3">Ref No</th>
+                      <th className="py-2 px-3">Description</th>
+                      <th className="py-2 px-3">Type</th>
+                      <th className="py-2 px-3 text-right">Amount</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    <tr className="font-mono font-bold">
-                      <td className="py-2.5 px-3 text-[#1f2328]">{formatCurrency(openingBalance)}</td>
-                      <td className="py-2.5 px-3 text-right text-[#1a7f37]">+{formatCurrency(totalCredits)}</td>
-                      <td className="py-2.5 px-3 text-right text-[#cf222e]">-{formatCurrency(totalDebits)}</td>
-                      <td className={`py-2.5 px-3 text-right ${netInflow >= 0 ? 'text-[#1a7f37]' : 'text-[#cf222e]'}`}>
-                        {netInflow >= 0 ? `+${formatCurrency(netInflow)}` : formatCurrency(netInflow)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-[#0969da]">{formatCurrency(closingBalance)}</td>
-                    </tr>
+                  <tbody className="divide-y divide-[#d0d7de]">
+                    {allTransactions.slice(0, 50).map((t, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="py-2 px-3 font-mono text-[11px]">{t.date}</td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-[#0969da]">{t.referenceNo || `REF-${idx + 1}`}</td>
+                        <td className="py-2 px-3 font-medium">{t.description}</td>
+                        <td className="py-2 px-3">
+                          <span className={`text-[10px] font-bold ${t.type?.toLowerCase().includes('credit') ? 'text-emerald-700' : 'text-rose-700'}`}>
+                            {t.type}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold">
+                          {formatCurrency(t.amount)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-
-              {/* Line-by-line Transactions Table */}
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-[#1f2328] uppercase tracking-wider">
-                  Transaction Audit Journal ({allTransactions.length} Entries)
-                </div>
-                <div className="overflow-x-auto border border-[#d0d7de] rounded-lg max-h-80 overflow-y-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[11px] font-semibold text-[#57606a] sticky top-0">
-                      <tr>
-                        <th className="py-2 px-2.5">Date</th>
-                        <th className="py-2 px-2.5">Ref #</th>
-                        <th className="py-2 px-2.5">Description</th>
-                        <th className="py-2 px-2.5">Category</th>
-                        <th className="py-2 px-2.5 text-right">Amount (₹)</th>
-                        <th className="py-2 px-2.5 text-right">Balance (₹)</th>
-                        <th className="py-2 px-2.5 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#d0d7de]">
-                      {allTransactions.map((t, i) => {
-                        const isCr =
-                          (t.type && t.type.toUpperCase().includes('CREDIT')) ||
-                          (t.type && t.type.toUpperCase() === 'CR')
-                        return (
-                          <tr key={i} className="hover:bg-[#f6f8fa]/40">
-                            <td className="py-1.5 px-2.5 font-mono text-[#57606a]">{t.date || '—'}</td>
-                            <td className="py-1.5 px-2.5 font-mono text-[#1f2328]">{t.referenceNo || '—'}</td>
-                            <td className="py-1.5 px-2.5 text-[#1f2328] max-w-xs truncate">{t.description}</td>
-                            <td className="py-1.5 px-2.5 text-[#57606a]">{t.category || (isCr ? 'Inflow' : 'Disbursement')}</td>
-                            <td className={`py-1.5 px-2.5 text-right font-mono font-bold ${isCr ? 'text-[#1a7f37]' : 'text-[#cf222e]'}`}>
-                              {isCr ? `+${formatCurrency(t.amount)}` : `-${formatCurrency(t.amount)}`}
-                            </td>
-                            <td className="py-1.5 px-2.5 text-right font-mono text-[#57606a]">
-                              {formatCurrency(t.balance || 0)}
-                            </td>
-                            <td className="py-1.5 px-2.5 text-center">
-                              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                                {t.status || 'Validated'}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Sign-off & Digital Signature */}
-              <div className="pt-4 border-t border-[#d0d7de] grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-[11px] text-[#57606a] block">AI Validation Engine:</span>
-                  <span className="font-semibold text-[#1f2328] block">FinBot LangGraph Engine v2.4</span>
-                  <span className="text-[10px] font-mono text-[#57606a]">
-                    Variance Verified: ₹0.00 • Formula Confirmed
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] text-[#57606a] block">Certified by Institution Comptroller:</span>
-                  <span className="font-bold text-[#1f2328] block">
-                    {currentUser?.name || 'Dr. Ramesh Babu, KAS'}
-                  </span>
-                  <span className="text-[10px] text-[#57606a]">
-                    Finance Officer, {myUniversity.name}
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import {
+  Eye,
   Landmark,
   CreditCard,
   Search,
@@ -112,6 +113,7 @@ export function UnivBankAccountView({
   // Ledger Search & Filter
   const [txSearch, setTxSearch] = useState('')
   const [txFilter, setTxFilter] = useState('ALL') // 'ALL', 'CREDIT', 'DEBIT'
+  const [activeSubTab, setActiveSubTab] = useState('statements') // 'statements', 'details', 'transactions'
   const [selectedStatementId, setSelectedStatementId] = useState(null)
 
   // Reset selected statement filter when account changes
@@ -563,330 +565,480 @@ export function UnivBankAccountView({
           </select>
         </div>
       )}
-      {/* 1. Header with Institution Scope */}
-      <div className="rounded-lg border border-[#d0d7de] bg-white p-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-2xs">
+      {/* 1. Top Header Row: Bank Account title + Add Bank Account button */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
         <div>
-          <div className="flex items-center gap-2">
-            <Landmark className="h-4 w-4 text-[#0969da]" />
-            <h1 className="text-sm font-bold text-[#1f2328]">
-              Bank Accounts & Treasury Management
-            </h1>
-            <Badge variant="blue" className="text-[10px] font-mono">
-              {myUniversity.code}
-            </Badge>
-          </div>
-          <p className="text-xs text-[#57606a] mt-0.5">
-            {myUniversity.name} • Manage institutional bank accounts, view real-time general ledger transactions, and upload quarterly statements.
-          </p>
+          <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">Bank Account</h1>
+          <p className="text-xs text-[#57606a] mt-0.5">Manage university bank accounts and statements</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Button
-            variant="outline"
+            variant="blue"
             size="sm"
             onClick={() => setIsAddAccountModalOpen(true)}
-            className="text-xs font-semibold shadow-2xs cursor-pointer text-[#0969da] border-[#54aeff]/40 hover:bg-blue-50"
+            className="text-xs font-semibold shadow-2xs bg-[#16a34a] hover:bg-[#15803d] text-white border-none cursor-pointer"
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
+            <Plus className="h-4 w-4 mr-1.5" />
             Add Bank Account
           </Button>
 
-          {canEditReupload && currentAccount && (
-            <Button
-              variant={isUploadPanelOpen ? 'secondary' : 'blue'}
-              size="sm"
-              onClick={() => setIsUploadPanelOpen((prev) => !prev)}
-              className="text-xs font-semibold shadow-2xs cursor-pointer"
-            >
-              <UploadCloud className="h-3.5 w-3.5 mr-1.5" />
-              {isUploadPanelOpen ? 'Close Upload Form' : `Upload Statement for ${currentAccount.bankName}`}
-            </Button>
-          )}
+          {/* User Avatar Circle */}
+          <div className="h-8 w-8 rounded-full bg-[#059669] text-white font-bold text-xs flex items-center justify-center shadow-2xs">
+            {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+          </div>
         </div>
       </div>
 
-      {/* 2. Top Section: ALL Accounts in Cards */}
-      <div>
-        <div className="flex items-center justify-between mb-2.5">
-          <span className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-1.5">
-            <CreditCard className="h-3.5 w-3.5 text-[#0969da]" />
-            Institutional Bank Accounts ({accounts.length} Active Accounts)
-          </span>
-          <span className="text-[11px] text-[#57606a]">
-            {accounts.length > 0 ? 'Click any card to select account view' : 'No accounts configured yet'}
-          </span>
-        </div>
+      {/* 2. Bank Account Details Card (Mockup Style) */}
+      {currentAccount ? (
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            {/* Bank name + Primary badge */}
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-blue-50 text-[#0969da] border border-blue-200 flex items-center justify-center font-bold text-lg shrink-0">
+                🏦
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-[#1f2328]">{currentAccount.bankName}</h2>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    Primary
+                  </span>
+                </div>
+                <div className="text-xs font-mono text-[#57606a] mt-0.5">
+                  A/c No. {currentAccount.accountNumberMasked || maskAccNum(currentAccount.accountNumber)}
+                </div>
+              </div>
+            </div>
 
-        {accounts.length === 0 ? (
-          <div className="p-8 rounded-xl border border-dashed border-[#d0d7de] bg-[#f6f8fa] text-center space-y-3">
-            <div className="h-12 w-12 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center mx-auto text-[#0969da]">
-              <Landmark className="h-6 w-6" />
+            {/* Account Metadata Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+              <div>
+                <span className="text-[11px] text-[#57606a] block">Account Type</span>
+                <span className="font-semibold text-[#1f2328]">
+                  {currentAccount.accountType || 'Current Account'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#57606a] block">Branch</span>
+                <span className="font-semibold text-[#1f2328]">
+                  {currentAccount.branch || 'Campus Branch'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#57606a] block">IFSC</span>
+                <span className="font-mono font-semibold text-[#1f2328]">
+                  {currentAccount.ifscCode || 'SBIN0005670'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[11px] text-[#57606a] block">Status</span>
+                <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  {currentAccount.status || 'Active'}
+                </span>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#1f2328]">No bank accounts have been added yet.</h3>
-              <p className="text-xs text-[#57606a] max-w-md mx-auto mt-1">
-                Your institution does not have any registered bank accounts in the database. Add your official institutional bank account to begin uploading transaction statements and executing intelligence analysis.
-              </p>
-            </div>
-            <Button
-              variant="blue"
-              size="sm"
-              onClick={() => setIsAddAccountModalOpen(true)}
-              className="text-xs font-semibold cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Add Bank Account
-            </Button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {accounts.map((acct) => {
-              const isSelected = acct.id === currentAccount?.id
 
-              return (
-                <div
+          {/* Account switcher pills if multiple accounts exist */}
+          {accounts.length > 1 && (
+            <div className="mt-4 pt-3 border-t border-[#d0d7de]/60 flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-[#57606a] font-medium">Switch Account:</span>
+              {accounts.map((acct) => (
+                <button
                   key={acct.id}
+                  type="button"
                   onClick={() => setSelectedAccountId(acct.id)}
-                  className={`p-4 rounded-xl border transition-all duration-150 cursor-pointer text-left relative ${
-                    isSelected
-                      ? 'border-[#0969da] bg-[#ddf4ff]/20 shadow-sm ring-2 ring-[#0969da]/30'
-                      : 'border-[#d0d7de] bg-white hover:border-[#8c959f] hover:shadow-2xs'
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer ${
+                    acct.id === currentAccount.id
+                      ? 'bg-[#0969da] text-white shadow-2xs'
+                      : 'bg-[#f6f8fa] text-[#57606a] border border-[#d0d7de] hover:bg-slate-100'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-sm ${
-                          isSelected
-                            ? 'bg-[#0969da] text-white shadow-xs'
-                            : 'bg-[#f6f8fa] text-[#57606a] border border-[#d0d7de]'
-                        }`}
-                      >
-                        🏦
-                      </div>
-                      <div>
-                        <h3 className="text-xs font-bold text-[#1f2328]">{acct.bankName}</h3>
-                        <p className="text-[10px] text-[#57606a] font-mono">{acct.accountNumberMasked || maskAccNum(acct.accountNumber)}</p>
-                      </div>
-                    </div>
+                  {acct.bankName} ({acct.accountNumber ? acct.accountNumber.slice(-4) : '••••'})
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-8 rounded-xl border border-dashed border-[#d0d7de] bg-[#f6f8fa] text-center space-y-3">
+          <Landmark className="h-8 w-8 text-[#0969da] mx-auto" />
+          <h3 className="text-sm font-bold text-[#1f2328]">No bank accounts registered</h3>
+          <Button
+            variant="blue"
+            size="sm"
+            onClick={() => setIsAddAccountModalOpen(true)}
+            className="text-xs bg-[#16a34a] text-white"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Add Bank Account
+          </Button>
+        </div>
+      )}
 
-                    <div className="flex items-center gap-1">
-                      {isSelected && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#0969da] text-white flex items-center gap-1 shadow-2xs">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Selected
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteAccount(acct)
-                        }}
-                        className="p-1 rounded text-[#8c959f] hover:text-[#cf222e] hover:bg-red-50"
-                        title="Delete Bank Account"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] font-medium text-[#57606a] truncate mb-2">
-                    {acct.accountName}
-                  </div>
-
-                  <div className="pt-2 border-t border-[#d0d7de]/60 flex items-baseline justify-between">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-[#57606a]">Live Balance</div>
-                      <div className="text-base font-bold text-[#1a7f37]">
-                        {formatCurrency(acct.currentBalance, true)}
-                      </div>
-                    </div>
-                    <Badge variant={isSelected ? 'blue' : 'default'} className="text-[10px]">
-                      {acct.accountType ? acct.accountType.split('/')[0].trim() : 'Current'}
-                    </Badge>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+      {/* 3. Sub-Tabs Bar: Bank Statements | Account Details | Transaction History */}
+      <div className="flex items-center gap-2 border-b border-[#d0d7de] pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('statements')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeSubTab === 'statements'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Bank Statements
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('details')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeSubTab === 'details'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Account Details
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('transactions')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+            activeSubTab === 'transactions'
+              ? 'bg-[#16a34a] text-white shadow-2xs'
+              : 'text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]'
+          }`}
+        >
+          Transaction History
+        </button>
       </div>
 
-      {/* 3. Upload Statement Panel (Bound to selected account) */}
-      {isUploadPanelOpen && currentAccount && (
-        <Card className="border-2 border-[#0969da] bg-gradient-to-br from-blue-50/40 via-white to-white">
-          <CardHeader className="border-b border-[#d0d7de] pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div>
-                <CardTitle className="text-sm font-bold text-blue-900 flex items-center gap-2">
-                  <UploadCloud className="h-4 w-4 text-[#0969da]" />
-                  Upload Statement for {currentAccount.bankName} ({currentAccount.accountNumber})
-                </CardTitle>
-                <CardDescription className="text-xs text-[#57606a]">
-                  This statement will be bound to account <strong className="font-mono">{currentAccount.accountNumber}</strong> with live OCR and Chart of Accounts categorization.
-                </CardDescription>
-              </div>
-              <Badge variant="blue" className="self-start sm:self-auto font-mono text-[10px]">
-                Target: {currentAccount.bankName}
-              </Badge>
-            </div>
-          </CardHeader>
-
-          <CardContent className="pt-4 space-y-4">
-            {/* Step A: Select Quarter */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-[#1f2328] mb-1.5 flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-[#0969da]" />
-                  Financial Quarter Period:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: 'Q1 FY26 (Apr - Jun 2026)', label: 'Q1 FY26', desc: 'Apr - Jun 2026' },
-                    { id: 'Q2 FY26 (Jul - Sep 2026)', label: 'Q2 FY26', desc: 'Jul - Sep 2026' },
-                    { id: 'Q3 FY26 (Oct - Dec 2026)', label: 'Q3 FY26 (Current)', desc: 'Oct - Dec 2026' },
-                    { id: 'Q4 FY26 (Jan - Mar 2027)', label: 'Q4 FY26', desc: 'Jan - Mar 2027' },
-                  ].map((q) => (
-                    <button
-                      key={q.id}
-                      type="button"
-                      onClick={() => setSelectedQuarter(q.id)}
-                      className={`p-2 rounded border text-left transition cursor-pointer ${
-                        selectedQuarter === q.id
-                          ? 'border-[#0969da] bg-[#ddf4ff]/50 text-[#0969da] font-bold'
-                          : 'border-[#d0d7de] bg-white text-[#1f2328] hover:bg-[#f6f8fa]'
-                      }`}
-                    >
-                      <div className="text-xs">{q.label}</div>
-                      <div className="text-[10px] text-[#57606a]">{q.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#1f2328] mb-1.5 flex items-center gap-1.5">
-                  <Building className="h-3.5 w-3.5 text-[#0969da]" />
-                  Selected Bank Account (Locked):
-                </label>
-                <div className="p-3 rounded-lg border border-blue-200 bg-white text-xs space-y-1">
-                  <div className="flex justify-between font-bold text-[#1f2328]">
-                    <span>{currentAccount.bankName}</span>
-                    <span className="text-[#1a7f37] font-semibold">{formatCurrency(currentAccount.currentBalance, true)}</span>
-                  </div>
-                  <div className="text-[11px] font-mono text-[#57606a]">Account: {currentAccount.accountNumber}</div>
-                  <div className="text-[11px] text-[#57606a]">Branch: {currentAccount.branch || 'Campus Branch'} • IFSC: {currentAccount.ifscCode}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Step B: Upload File or Download Template */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault()
-                setIsDragOver(true)
-              }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-                isDragOver ? 'border-[#0969da] bg-[#ddf4ff]/40' : 'border-[#d0d7de] hover:border-[#0969da] bg-white'
-              }`}
-            >
-              <UploadCloud className="h-8 w-8 text-[#0969da] mx-auto mb-2" />
-              <div className="text-xs font-semibold text-[#1f2328]">
-                Drag and drop your bank statement (CSV, XLSX, PDF) or click to browse
-              </div>
-              <p className="text-[11px] text-[#57606a] mt-1">
-                Statement will be parsed dynamically with AI OCR and auto-reconciled against account {currentAccount.accountNumber}
+      {/* 4. Tab Content A: Bank Statements (Upload panel on Left, Uploaded Statements table on Right) */}
+      {activeSubTab === 'statements' && currentAccount && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Column: Upload Bank Statement Panel */}
+          <div className="lg:col-span-5 bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-[#1f2328]">Upload Bank Statement</h2>
+              <p className="text-xs text-[#57606a] mt-0.5">
+                Upload bank statement (PDF, Excel or CSV) for AI analysis
               </p>
 
-              <input
-                type="file"
-                id="file-upload-input"
-                className="hidden"
-                accept=".csv,.pdf,.xlsx"
-                onChange={handleFileChange}
-              />
-
-              <div className="mt-3 flex items-center justify-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById('file-upload-input').click()}
-                  className="text-xs"
+              {/* Quarter selector */}
+              <div className="mt-3">
+                <label className="block text-[11px] font-semibold text-[#57606a] mb-1">
+                  Statement Period:
+                </label>
+                <select
+                  value={selectedQuarter}
+                  onChange={(e) => setSelectedQuarter(e.target.value)}
+                  className="w-full text-xs bg-[#f6f8fa] border border-[#d0d7de] rounded-lg px-2.5 py-1.5 text-[#1f2328] focus:outline-none focus:border-[#16a34a]"
                 >
-                  Select File from Computer
-                </Button>
-                <span className="text-xs text-[#8c959f]">or</span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleDownloadTemplate}
-                  className="text-xs font-semibold text-[#0969da] border-[#54aeff]/40"
-                >
-                  <Download className="h-3 w-3 mr-1" />
-                  Download Sample CSV Template
-                </Button>
+                  <option value="Apr 2025">Apr 2025</option>
+                  <option value="May 2025">May 2025</option>
+                  <option value="Jun 2025">Jun 2025</option>
+                  <option value="Q1 FY26 (Apr - Jun 2026)">Q1 FY26 (Apr - Jun 2026)</option>
+                  <option value="Q2 FY26 (Jul - Sep 2026)">Q2 FY26 (Jul - Sep 2026)</option>
+                  <option value="Q3 FY26 (Oct - Dec 2026)">Q3 FY26 (Oct - Dec 2026)</option>
+                  <option value="Q4 FY26 (Jan - Mar 2027)">Q4 FY26 (Jan - Mar 2027)</option>
+                </select>
               </div>
+
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  setIsDragOver(true)
+                }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById('direct-file-input').click()}
+                className={`mt-3 border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                  isDragOver
+                    ? 'border-[#16a34a] bg-emerald-50/50'
+                    : 'border-[#d0d7de] hover:border-[#16a34a] bg-[#fbfcfd]'
+                }`}
+              >
+                <UploadCloud className="h-8 w-8 text-[#16a34a] mx-auto mb-2" />
+                <div className="text-xs font-semibold text-[#1f2328]">
+                  Drag & drop file here or click to upload
+                </div>
+                <div className="text-[11px] text-[#57606a] mt-1">PDF, Excel, CSV (Max 50 MB)</div>
+
+                <input
+                  type="file"
+                  id="direct-file-input"
+                  className="hidden"
+                  accept=".pdf,.csv,.xlsx"
+                  onChange={handleFileChange}
+                />
+              </div>
+
+              {/* Progress status */}
+              {processingStage !== 'idle' && (
+                <div className="mt-3 p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de] space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="font-semibold text-[#1f2328]">
+                      {uploadedFile?.name || 'Processing File'}
+                    </span>
+                    <span className="font-mono text-[#16a34a] font-bold">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-[#d0d7de] h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-[#16a34a] h-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  {processingStage === 'completed' && (
+                    <div className="text-xs text-emerald-700 flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Ingested and verified successfully!
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Upload Stepper Progress */}
-            {processingStage !== 'idle' && (
-              <div className="p-3.5 bg-[#f6f8fa] rounded-lg border border-[#d0d7de] space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-[#1f2328]">
-                    Processing {uploadedFile?.name || 'Statement'}
-                  </span>
-                  <span className="font-mono text-[#0969da] font-bold">{uploadProgress}%</span>
-                </div>
+            <div className="mt-4 pt-3 border-t border-[#d0d7de]">
+              <Button
+                variant="blue"
+                size="sm"
+                onClick={() => document.getElementById('direct-file-input').click()}
+                className="w-full text-xs font-semibold bg-[#16a34a] hover:bg-[#15803d] text-white border-none cursor-pointer"
+              >
+                Upload Statement
+              </Button>
+            </div>
+          </div>
 
-                <div className="w-full bg-[#d0d7de] h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-[#0969da] h-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
+          {/* Right Column: Uploaded Statements Table */}
+          <div className="lg:col-span-7 bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-3 border-b border-[#d0d7de]">
+                <h2 className="text-sm font-bold text-[#1f2328]">Uploaded Statements</h2>
+                <Badge variant="outline" className="text-xs font-semibold text-[#57606a]">
+                  {matchedStatements.length} Filings
+                </Badge>
+              </div>
+
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#d0d7de] bg-[#f6f8fa] text-[11px] font-semibold text-[#57606a]">
+                      <th className="py-2.5 px-3">Statement Period</th>
+                      <th className="py-2.5 px-3">File Name</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                      <th className="py-2.5 px-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#d0d7de]">
+                    {matchedStatements.length > 0 ? (
+                      matchedStatements.map((stmt) => (
+                        <tr key={stmt.id} className="hover:bg-[#f6f8fa] transition-colors">
+                          <td className="py-3 px-3 font-semibold text-[#1f2328]">
+                            {stmt.quarter || 'Apr 2025'}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-[11px] text-[#0969da]">
+                            {stmt.fileName || 'SBI_Apr_2025.pdf'}
+                          </td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {stmt.status === 'Processing' ? 'Processing' : 'Processed'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-2 text-[#57606a]">
+                              <button
+                                type="button"
+                                title="View Statement Transactions"
+                                onClick={() => {
+                                  setActiveStatement(stmt)
+                                  setSelectedStatementId(stmt.id)
+                                  setActiveSubTab('transactions')
+                                }}
+                                className="p-1 hover:text-[#0969da] hover:bg-blue-50 rounded transition-colors"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Download Statement"
+                                onClick={() => handleDownloadTemplate()}
+                                className="p-1 hover:text-[#16a34a] hover:bg-emerald-50 rounded transition-colors"
+                              >
+                                <Download className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      // Mockup initial preview rows
+                      [
+                        { period: 'Apr 2025', file: 'SBI_Apr_2025.pdf', status: 'Processed' },
+                        { period: 'Mar 2025', file: 'SBI_Mar_2025.pdf', status: 'Processed' },
+                        { period: 'Feb 2025', file: 'SBI_Feb_2025.pdf', status: 'Processed' },
+                        { period: 'Jan 2025', file: 'SBI_Jan_2025.pdf', status: 'Processed' },
+                      ].map((mock, idx) => (
+                        <tr key={idx} className="hover:bg-[#f6f8fa] transition-colors">
+                          <td className="py-3 px-3 font-semibold text-[#1f2328]">{mock.period}</td>
+                          <td className="py-3 px-3 font-mono text-[11px] text-[#0969da]">{mock.file}</td>
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {mock.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-2 text-[#57606a]">
+                              <button
+                                type="button"
+                                title="View Statement"
+                                onClick={() => setActiveSubTab('transactions')}
+                                className="p-1 hover:text-[#0969da] rounded"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Download Statement"
+                                onClick={() => handleDownloadTemplate()}
+                                className="p-1 hover:text-[#16a34a] rounded"
+                              >
+                                <Download className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Tab Content B: Transaction History */}
+      {activeSubTab === 'transactions' && currentAccount && (
+        <Card className="bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
+          <CardHeader className="border-b border-[#d0d7de] pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CardTitle className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-[#0969da]" />
+                    General Ledger Transactions — {currentAccount.bankName}
+                  </CardTitle>
+                  <Badge variant="blue" className="text-[10px] font-mono">
+                    {transactions.length} Transactions
+                  </Badge>
+                  {selectedStatementId && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedStatementId(null)}
+                      className="text-[11px] text-[#0969da] hover:underline font-semibold cursor-pointer"
+                    >
+                      (Filtered by statement — View All)
+                    </button>
+                  )}
+                </div>
+                <CardDescription className="text-xs text-[#57606a]">
+                  Dynamic ledger journal lines parsed from verified quarterly statement filings
+                </CardDescription>
+              </div>
+
+              {/* Search & Filters */}
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#57606a]" />
+                  <input
+                    type="text"
+                    placeholder="Search reference, description..."
+                    value={txSearch}
+                    onChange={(e) => setTxSearch(e.target.value)}
+                    className="h-8 pl-8 pr-2.5 text-xs rounded-md border border-[#d0d7de] bg-white focus:outline-none focus:border-[#16a34a]"
                   />
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 text-[10px] text-center">
-                  <span className={uploadProgress >= 25 ? 'font-bold text-[#0969da]' : 'text-[#8c959f]'}>1. Uploading</span>
-                  <span className={uploadProgress >= 50 ? 'font-bold text-[#0969da]' : 'text-[#8c959f]'}>2. OCR Extraction</span>
-                  <span className={uploadProgress >= 75 ? 'font-bold text-[#0969da]' : 'text-[#8c959f]'}>3. AI Classification</span>
-                  <span className={uploadProgress >= 100 ? 'font-bold text-[#1a7f37]' : 'text-[#8c959f]'}>4. Reconciled</span>
-                </div>
-
-                {processingStage === 'completed' && (
-                  <div className="p-3 bg-[#dafbe1]/40 border border-[#1a7f37]/30 rounded-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-2">
-                    <div className="flex items-center gap-2 text-xs text-[#1a7f37]">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      <span>Bank statement successfully ingested and categorized! Ready for AI Validation.</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button variant="ghost" size="sm" onClick={handleResetUpload} className="text-xs">
-                        Upload Another
-                      </Button>
-                      <Button
-                        variant="blue"
-                        size="sm"
-                        onClick={() => onSelectTab('ai_validation')}
-                        className="text-xs font-semibold"
-                      >
-                        Proceed to AI Validation
-                        <ArrowRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <select
+                  value={txFilter}
+                  onChange={(e) => setTxFilter(e.target.value)}
+                  className="h-8 px-2 text-xs rounded-md border border-[#d0d7de] bg-white text-[#1f2328] focus:outline-none focus:border-[#16a34a]"
+                >
+                  <option value="ALL">All Entries</option>
+                  <option value="CREDIT">Credits Only (+)</option>
+                  <option value="DEBIT">Debits Only (-)</option>
+                </select>
               </div>
-            )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[#d0d7de] bg-[#f6f8fa] text-[11px] font-semibold text-[#57606a]">
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Reference No</th>
+                    <th className="py-2.5 px-3">Description</th>
+                    <th className="py-2.5 px-3">Chart Category</th>
+                    <th className="py-2.5 px-3">Type</th>
+                    <th className="py-2.5 px-3 text-right">Amount</th>
+                    <th className="py-2.5 px-3 text-right">Balance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#d0d7de]">
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 text-center text-xs text-[#57606a]">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-[#1f2328]">No transactions on record for this account</p>
+                          <p className="text-[11px] text-[#57606a]">
+                            Upload a quarterly bank statement (CSV/PDF) to parse, classify, and reconcile live ledger entries.
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    transactions.map((tx) => (
+                      <tr key={tx.id} className="hover:bg-[#f6f8fa]/60 transition-colors">
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-[#57606a]">{tx.date}</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] font-medium text-[#0969da]">{tx.reference}</td>
+                        <td className="py-2.5 px-3 font-medium text-[#1f2328]">{tx.description}</td>
+                        <td className="py-2.5 px-3 text-[#57606a] text-[11px]">{tx.category}</td>
+                        <td className="py-2.5 px-3">
+                          <Badge variant={tx.type === 'CREDIT' ? 'success' : 'danger'} className="text-[9.5px]">
+                            {tx.type}
+                          </Badge>
+                        </td>
+                        <td
+                          className={`py-2.5 px-3 text-right font-semibold font-mono ${
+                            tx.type === 'CREDIT' ? 'text-[#1a7f37]' : 'text-[#cf222e]'
+                          }`}
+                        >
+                          {tx.type === 'CREDIT' ? '+' : '-'}
+                          {formatCurrency(tx.amount)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono font-medium text-[#1f2328]">
+                          {formatCurrency(tx.balance)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* 4. Selected Account Details & Historical Charts */}
-      {currentAccount && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Account Details Specs */}
+      {/* 4. Tab Content C: Account Details */}
+      {activeSubTab === 'details' && currentAccount && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <Card className="lg:col-span-1 bg-white">
             <CardHeader className="border-b border-[#d0d7de] pb-3">
               <CardTitle className="text-xs font-bold text-[#1f2328] uppercase tracking-wider flex items-center gap-2">
@@ -927,12 +1079,6 @@ export function UnivBankAccountView({
                 <span className="text-[#57606a]">Account Status:</span>
                 <Badge variant="success" className="text-[10px]">{currentAccount.status || 'Active'}</Badge>
               </div>
-              {currentAccount.description && (
-                <div className="flex justify-between py-1 border-b border-[#d0d7de]/50">
-                  <span className="text-[#57606a]">Description:</span>
-                  <span className="text-[#1f2328] text-[11px] truncate max-w-[180px]">{currentAccount.description}</span>
-                </div>
-              )}
               <div className="flex justify-between py-1">
                 <span className="text-[#57606a]">Statutory Solvency:</span>
                 <Badge variant="blue" className="text-[10px]">Compliant</Badge>
@@ -940,7 +1086,6 @@ export function UnivBankAccountView({
             </CardContent>
           </Card>
 
-          {/* Balance Trend Chart */}
           <Card className="lg:col-span-2 bg-white">
             <CardHeader className="border-b border-[#d0d7de] pb-3">
               <div className="flex items-center justify-between">
@@ -954,13 +1099,13 @@ export function UnivBankAccountView({
               </div>
             </CardHeader>
             <CardContent className="pt-3">
-              <div className="h-44 w-full">
+              <div className="h-48 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={balanceTrend} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="acctBalGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0969da" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#0969da" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d0d7de" />
@@ -979,7 +1124,7 @@ export function UnivBankAccountView({
                       type="monotone"
                       dataKey="balance"
                       name="Account Balance"
-                      stroke="#0969da"
+                      stroke="#16a34a"
                       strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#acctBalGrad)"
@@ -991,242 +1136,7 @@ export function UnivBankAccountView({
           </Card>
         </div>
       )}
-
-      {/* 5. General Ledger Transaction Lines */}
-      {currentAccount && (
-        <Card>
-          <CardHeader className="border-b border-[#d0d7de] pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <CardTitle className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-[#0969da]" />
-                    General Ledger Transactions — {currentAccount.bankName}
-                  </CardTitle>
-                  <Badge variant="blue" className="text-[10px] font-mono">
-                    {transactions.length} Transactions
-                  </Badge>
-                  {selectedStatementId && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStatementId(null)}
-                      className="text-[11px] text-[#0969da] hover:underline font-semibold cursor-pointer"
-                    >
-                      (Filtered by statement — View All)
-                    </button>
-                  )}
-                </div>
-                <CardDescription className="text-xs text-[#57606a]">
-                  Dynamic ledger journal lines parsed from verified quarterly statement filings
-                </CardDescription>
-              </div>
-
-              {/* Search & Filters */}
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#57606a]" />
-                  <input
-                    type="text"
-                    placeholder="Search reference, description..."
-                    value={txSearch}
-                    onChange={(e) => setTxSearch(e.target.value)}
-                    className="h-8 pl-8 pr-2.5 text-xs rounded-md border border-[#d0d7de] bg-white focus:outline-none focus:border-[#0969da]"
-                  />
-                </div>
-
-                <select
-                  value={txFilter}
-                  onChange={(e) => setTxFilter(e.target.value)}
-                  className="h-8 px-2 text-xs rounded-md border border-[#d0d7de] bg-white text-[#1f2328] focus:outline-none focus:border-[#0969da]"
-                >
-                  <option value="ALL">All Entries</option>
-                  <option value="CREDIT">Credits Only (+)</option>
-                  <option value="DEBIT">Debits Only (-)</option>
-                </select>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[#d0d7de] bg-[#f6f8fa] text-[11px] font-semibold text-[#57606a]">
-                    <th className="py-2.5 px-3">Date</th>
-                    <th className="py-2.5 px-3">Reference No</th>
-                    <th className="py-2.5 px-3">Description</th>
-                    <th className="py-2.5 px-3">Chart Category</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3 text-right">Amount</th>
-                    <th className="py-2.5 px-3 text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#d0d7de]">
-                  {transactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-10 text-center text-xs text-[#57606a]">
-                        <div className="space-y-1">
-                          <p className="font-semibold text-[#1f2328]">No transactions on record for this account</p>
-                          <p className="text-[11px] text-[#57606a]">
-                            Upload a quarterly bank statement (CSV) above to parse, classify, and reconcile live ledger entries.
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    transactions.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-[#f6f8fa]/60 transition-colors">
-                        <td className="py-2.5 px-3 font-mono text-[11px] text-[#57606a]">{tx.date}</td>
-                        <td className="py-2.5 px-3 font-mono text-[11px] font-medium text-[#0969da]">{tx.reference}</td>
-                        <td className="py-2.5 px-3 font-medium text-[#1f2328]">{tx.description}</td>
-                        <td className="py-2.5 px-3 text-[#57606a] text-[11px]">{tx.category}</td>
-                        <td className="py-2.5 px-3">
-                          <Badge variant={tx.type === 'CREDIT' ? 'success' : 'danger'} className="text-[9.5px]">
-                            {tx.type}
-                          </Badge>
-                        </td>
-                        <td
-                          className={`py-2.5 px-3 text-right font-semibold font-mono ${
-                            tx.type === 'CREDIT' ? 'text-[#1a7f37]' : 'text-[#cf222e]'
-                          }`}
-                        >
-                          {tx.type === 'CREDIT' ? '+' : '-'}
-                          {formatCurrency(tx.amount)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-medium text-[#1f2328]">
-                          {formatCurrency(tx.balance)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 6. Previous Statement Uploads History */}
-      {currentAccount && (
-        <Card className="bg-white border border-[#d0d7de]">
-          <CardHeader className="border-b border-[#d0d7de] pb-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <CardTitle className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
-                  <History className="h-4 w-4 text-[#0969da]" />
-                  Previous Statement Uploads History — {currentAccount.bankName}
-                </CardTitle>
-                <CardDescription className="text-xs text-[#57606a]">
-                  Chronological record of filed quarterly statements for account {currentAccount.accountNumber}.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[#d0d7de] bg-[#f6f8fa] text-[11px] font-semibold text-[#57606a]">
-                    <th className="py-2.5 px-3">Quarter</th>
-                    <th className="py-2.5 px-3">Statement File</th>
-                    <th className="py-2.5 px-3">Uploaded At</th>
-                    <th className="py-2.5 px-3">Uploaded By</th>
-                    <th className="py-2.5 px-3 text-right">Credits (+)</th>
-                    <th className="py-2.5 px-3 text-right">Debits (-)</th>
-                    <th className="py-2.5 px-3 text-center">Status</th>
-                    <th className="py-2.5 px-4 text-right">Finance Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#d0d7de]">
-                  {previousStatements.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-xs text-[#57606a]">
-                        No quarterly statements have been uploaded for this account yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    previousStatements.map((stmt) => (
-                      <tr key={stmt.id} className="hover:bg-[#f6f8fa]/70 transition-colors">
-                        <td className="py-3 px-3 font-semibold text-[#1f2328]">
-                          {stmt.quarter}
-                          {stmt.isCorrected && (
-                            <span className="block text-[10px] text-[#0969da] font-normal">
-                              ● Corrected Revision
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 font-mono text-[11px] font-medium text-[#0969da]">
-                          <div className="flex items-center gap-1.5">
-                            <FileText className="h-3.5 w-3.5 text-[#57606a]" />
-                            <span>{stmt.fileName}</span>
-                          </div>
-                          <span className="text-[10px] text-[#57606a] font-normal">
-                            Size: {stmt.fileSize || '250 KB'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-[#57606a] font-mono text-[11px]">
-                          {stmt.uploadedAt || 'Recently'}
-                        </td>
-                        <td className="py-3 px-3 text-[#1f2328] font-medium">
-                          {stmt.uploadedBy || 'Finance Officer'}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-semibold text-[#1a7f37]">
-                          +{formatCurrency(stmt.totalCredits || 0)}
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-semibold text-[#cf222e]">
-                          -{formatCurrency(stmt.totalDebits || 0)}
-                        </td>
-                        <td className="py-3 px-3 text-center">
-                          <Badge variant={stmt.status?.includes('Approved') ? 'success' : 'blue'} className="text-[9.5px]">
-                            {stmt.status || 'AI Validated'}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              variant={selectedStatementId === stmt.id ? 'blue' : 'outline'}
-                              size="sm"
-                              onClick={() => setSelectedStatementId(selectedStatementId === stmt.id ? null : stmt.id)}
-                              className="h-7 text-[11px] px-2 font-semibold cursor-pointer"
-                            >
-                              {selectedStatementId === stmt.id ? 'Viewing' : 'View'}
-                            </Button>
-                            {canEditReupload && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenReuploadModal(stmt)}
-                                className="h-7 text-[11px] px-2 font-semibold text-[#0969da] hover:bg-blue-50 border-[#0969da]/30 cursor-pointer"
-                              >
-                                <Edit3 className="h-3 w-3 mr-1" />
-                                Edit & Reupload
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setActiveStatement(stmt)
-                                onSelectTab('ai_validation')
-                              }}
-                              className="h-7 text-[11px] px-2 text-[#57606a] hover:text-[#1f2328]"
-                            >
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              AI Report
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+      
       {/* 7. Modal: Add Official Bank Account */}
       {isAddAccountModalOpen && (
         <Modal

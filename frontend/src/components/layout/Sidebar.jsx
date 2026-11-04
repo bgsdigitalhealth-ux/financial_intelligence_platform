@@ -179,6 +179,12 @@ export function Sidebar({
             icon: FileSpreadsheet,
             description: 'Quarterly statement, reconciliation & Form 19-A',
           },
+          {
+            id: 'settings',
+            label: 'Settings',
+            icon: Settings,
+            description: 'Colleges directory & registered official emails',
+          },
         ]
       default:
         return []

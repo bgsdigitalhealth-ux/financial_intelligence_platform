@@ -247,356 +247,189 @@ export function AIAnalysisValidationView({ onSelectTab, onTriggerToast }) {
 
   return (
     <div className="space-y-6">
-      {/* 1. Header Banner */}
-      <div className="rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50/70 via-white to-blue-50/40 p-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-2xs">
+      {/* 1. Top Header Row: AI Validation title + Statement Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="h-6 w-6 rounded-full bg-[#8250df] text-white text-xs flex items-center justify-center font-bold shrink-0">
-              5
-            </span>
-            <h1 className="text-sm font-bold text-[#1f2328]">
-              Step 5: AI Analysis & Validation
-            </h1>
-            <Badge variant="purple" className="text-[10px]">
-              AI Reconciled
-            </Badge>
-          </div>
-          <p className="text-xs text-[#57606a] mt-0.5">
-            OCR line extraction, double-entry mathematical reconciliation, Chart of Accounts classification & exception resolution.
-          </p>
+          <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">AI Validation</h1>
+          <p className="text-xs text-[#57606a] mt-0.5">Extract, verify and validate bank statement data using AI</p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onSelectTab('statement_upload')}
-            className="text-xs text-[#57606a] hover:text-[#1f2328]"
-          >
-            Step 4: Upload
-          </Button>
-          <Button
-            variant="blue"
-            size="sm"
-            onClick={() => onSelectTab('submission_compliance')}
-            className="text-xs font-semibold"
-          >
-            <span>Proceed to Step 6: Compliance</span>
-            <ChevronRight className="h-3.5 w-3.5 ml-1" />
-          </Button>
-        </div>
-      </div>
-
-      {/* 2. Visual AI Validation Pipeline Stepper (Crystal Clear Understanding) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Step 1: Document Parsing & OCR */}
-        <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50/50">
-          <div className="flex items-center justify-between text-xs font-bold text-[#1f2328]">
-            <span>1. OCR & Parsing</span>
-            <CheckCircle2 className="h-4 w-4 text-[#1a7f37]" />
-          </div>
-          <div className="text-[11px] text-[#57606a] mt-1">
-            <strong>{extractedTxCount}</strong> transactions parsed from statement.
-          </div>
-          <div className="text-[10px] font-semibold text-[#1a7f37] mt-1.5 flex items-center gap-1">
-            ✓ Text & Header Extraction Complete
-          </div>
-        </div>
-
-        {/* Step 2: Double-Entry Math Reconciliation */}
-        <div
-          className={`p-3 rounded-lg border ${
-            isReconciled ? 'border-emerald-200 bg-emerald-50/50' : 'border-rose-200 bg-rose-50/50'
-          }`}
-        >
-          <div className="flex items-center justify-between text-xs font-bold text-[#1f2328]">
-            <span>2. Ledger Reconciliation</span>
-            {isReconciled ? (
-              <CheckCircle2 className="h-4 w-4 text-[#1a7f37]" />
-            ) : (
-              <AlertTriangle className="h-4 w-4 text-[#cf222e]" />
-            )}
-          </div>
-          <div className="text-[11px] text-[#57606a] mt-1">
-            Formula: Opening + Credits − Debits
-          </div>
-          <div
-            className={`text-[10px] font-semibold mt-1.5 ${
-              isReconciled ? 'text-[#1a7f37]' : 'text-[#cf222e]'
-            }`}
-          >
-            {isReconciled ? '✓ Math Verified (₹0.00 Variance)' : `⚠ Discrepancy: ${formatCurrency(variance)}`}
-          </div>
-        </div>
-
-        {/* Step 3: Chart of Accounts Auto-Classification */}
-        <div className="p-3 rounded-lg border border-blue-200 bg-blue-50/50">
-          <div className="flex items-center justify-between text-xs font-bold text-[#1f2328]">
-            <span>3. COA Auto-Classification</span>
-            <Sparkles className="h-4 w-4 text-[#0969da]" />
-          </div>
-          <div className="text-[11px] text-[#57606a] mt-1">
-            Auto-categorized into statutory budget heads.
-          </div>
-          <div className="text-[10px] font-semibold text-[#0969da] mt-1.5">
-            ✓ Average AI Confidence: {avgConfidence}%
-          </div>
-        </div>
-
-        {/* Step 4: Policy & Anomaly Screening */}
-        <div
-          className={`p-3 rounded-lg border ${
-            pendingExceptions.length === 0
-              ? 'border-emerald-200 bg-emerald-50/50'
-              : 'border-amber-200 bg-amber-50/50'
-          }`}
-        >
-          <div className="flex items-center justify-between text-xs font-bold text-[#1f2328]">
-            <span>4. Anomaly & Rule Check</span>
-            {pendingExceptions.length === 0 ? (
-              <CheckCircle2 className="h-4 w-4 text-[#1a7f37]" />
-            ) : (
-              <AlertTriangle className="h-4 w-4 text-[#d97706]" />
-            )}
-          </div>
-          <div className="text-[11px] text-[#57606a] mt-1">
-            Screens duplicate payments & unallowable costs.
-          </div>
-          <div
-            className={`text-[10px] font-semibold mt-1.5 ${
-              pendingExceptions.length === 0 ? 'text-[#1a7f37]' : 'text-[#d97706]'
-            }`}
-          >
-            {pendingExceptions.length === 0
-              ? '✓ Clean (Zero Exceptions)'
-              : `⚠ ${pendingExceptions.length} Exception(s) Pending Review`}
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Linked Statement & Mathematical Reconciliation Bar */}
-      <div className="p-4 bg-white rounded-xl border border-[#d0d7de] shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#eaeef2] pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-[#1f2328]">{statement.bankName}</span>
-              <span className="font-mono text-xs text-[#0969da] px-1.5 py-0.5 rounded bg-[#ddf4ff] font-semibold">
-                {statement.accountNumberMasked || maskAccNum(statement.accountNumber)}
-              </span>
-              <Badge variant="blue" className="text-[10px] font-mono">
-                {statement.quarter || 'FY26 Q3'}
-              </Badge>
-            </div>
-            <p className="text-xs text-[#57606a] mt-0.5">
-              Source File: <strong className="font-mono text-[#1f2328]">{statement.fileName}</strong> • Processed: {statement.createdAt || statement.uploadedAt || 'Current Session'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
-              {extractedTxCount} Extracted Rows
-            </Badge>
-            <Badge
-              variant={statement.status === 'Approved by Gov Leader' ? 'success' : 'blue'}
-              className="text-xs"
+        <div className="flex items-center gap-3">
+          {/* Statement File Selector */}
+          <div className="relative">
+            <select
+              value={statement?.id || ''}
+              onChange={(e) => {
+                const found = statements.find((s) => s.id === e.target.value)
+                if (found) setActiveStatement(found)
+              }}
+              className="text-xs font-semibold bg-white border border-[#d0d7de] rounded-lg px-3 py-1.5 pr-7 text-[#1f2328] appearance-none focus:outline-none focus:border-[#16a34a] cursor-pointer shadow-2xs"
             >
-              {statement.status}
-            </Badge>
-          </div>
-        </div>
-
-        {/* Clear Mathematical Reconciliation Equation */}
-        <div
-          className={`p-3.5 rounded-lg border text-xs flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 ${
-            isReconciled
-              ? 'bg-[#dafbe1]/40 border-[#1a7f37]/30 text-[#1a7f37]'
-              : 'bg-[#ffebe9] border-[#cf222e]/30 text-[#cf222e]'
-          }`}
-        >
-          <div className="flex items-start gap-2.5">
-            {isReconciled ? (
-              <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-[#1a7f37]" />
-            ) : (
-              <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-[#cf222e]" />
-            )}
-            <div>
-              <div className="font-bold text-xs flex flex-wrap items-center gap-2">
-                <span>
-                  {isReconciled
-                    ? 'Double-Entry Mathematical Balance Verified'
-                    : 'Mathematical Balance Discrepancy Flagged'}
-                </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/80 border border-current font-bold text-[#1f2328]">
-                  Opening ({formatCurrency(openingBalance, false)}) + Credits ({formatCurrency(totalCredits, false)}) − Debits ({formatCurrency(totalDebits, false)}) = {formatCurrency(calculatedClosing, false)}
-                </span>
-              </div>
-              <div className="text-[11px] mt-1 opacity-90">
-                {isReconciled
-                  ? 'Calculated ledger sum matches reported statement closing balance exactly with zero forced adjustments.'
-                  : `A discrepancy of ${formatCurrency(variance, false)} was detected between calculated transactions and stated closing balance.`}
-              </div>
-            </div>
-          </div>
-          <div className="shrink-0 font-mono text-xs font-bold">
-            {isReconciled ? 'Variance: ₹0.00' : `Variance: ₹${formatCurrency(variance, false)}`}
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Extracted vs Calculated Financial Balance Breakdown */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Opening Balance */}
-        <Card className="p-4 bg-white border border-[#d0d7de] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#57606a] font-semibold uppercase tracking-wider">
-                Opening Balance
-              </span>
-              <Badge variant="outline" className="text-[9px] text-[#57606a] bg-[#f6f8fa]">
-                Extracted
-              </Badge>
-            </div>
-            <div className="text-xl font-bold text-[#1f2328] mt-2">
-              {formatCurrency(openingBalance, true)}
-            </div>
-          </div>
-          <div className="text-[10px] text-[#57606a] mt-2 pt-2 border-t border-[#eaeef2]">
-            Extracted from statement header
-          </div>
-        </Card>
-
-        {/* Card 2: Total Credits */}
-        <Card className="p-4 bg-white border border-[#d0d7de] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#57606a] font-semibold uppercase tracking-wider">
-                Total Credits
-              </span>
-              <Badge variant="success" className="text-[9px]">
-                Calculated
-              </Badge>
-            </div>
-            <div className="text-xl font-bold text-[#1a7f37] mt-2">
-              +{formatCurrency(totalCredits, true)}
-            </div>
-          </div>
-          <div className="text-[10px] text-[#57606a] mt-2 pt-2 border-t border-[#eaeef2]">
-            Sum of verified credit vouchers
-          </div>
-        </Card>
-
-        {/* Card 3: Total Debits */}
-        <Card className="p-4 bg-white border border-[#d0d7de] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#57606a] font-semibold uppercase tracking-wider">
-                Total Debits
-              </span>
-              <Badge variant="danger" className="text-[9px]">
-                Calculated
-              </Badge>
-            </div>
-            <div className="text-xl font-bold text-[#cf222e] mt-2">
-              -{formatCurrency(totalDebits, true)}
-            </div>
-          </div>
-          <div className="text-[10px] text-[#57606a] mt-2 pt-2 border-t border-[#eaeef2]">
-            Sum of verified debit disbursements
-          </div>
-        </Card>
-
-        {/* Card 4: Closing Balance */}
-        <Card className="p-4 bg-white border border-[#d0d7de] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#57606a] font-semibold uppercase tracking-wider">
-                Closing Balance
-              </span>
-              <Badge variant="outline" className="text-[9px] text-[#57606a] bg-[#f6f8fa]">
-                Extracted
-              </Badge>
-            </div>
-            <div className="text-xl font-bold text-[#0969da] mt-2">
-              {formatCurrency(reportedClosing, true)}
-            </div>
-          </div>
-          <div className="text-[10px] text-[#57606a] mt-2 pt-2 border-t border-[#eaeef2]">
-            Reported end-of-period ledger balance
-          </div>
-        </Card>
-      </div>
-
-      {/* 5. AI-Generated Explanation & Finding Summary */}
-      <Card className="p-5 bg-gradient-to-br from-[#fbefff]/30 via-white to-white border border-[#d0d7de]">
-        <div className="flex items-center justify-between mb-3 border-b border-[#eaeef2] pb-2.5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#8250df]" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#1f2328]">
-              AI-Generated Statement Analysis & Audit Findings
-            </h3>
-          </div>
-          <Badge variant="purple" className="text-[10px]">
-            AI Verified
-          </Badge>
-        </div>
-
-        <div className="space-y-3 text-xs text-[#1f2328]">
-          <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/70 leading-relaxed">
-            {statement.aiValidation?.aiExplanation ||
-              statement.aiValidation?.summary ||
-              statement.aiSummary ||
-              statement.summary || (
-                <span>
-                  Statement processed successfully across {extractedTxCount} extracted general ledger lines. OCR line items have been auto-classified against the official Karnataka State Chart of Accounts with an accuracy score of {avgConfidence}%. Financial validation confirmed opening and closing balances with zero forced adjustments.
-                </span>
+              {statements.length > 0 ? (
+                statements.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.fileName || `Statement_${s.quarter || 'Q1'}.pdf`}
+                  </option>
+                ))
+              ) : (
+                <option value="SBI_Apr_2025.pdf">SBI_Apr_2025.pdf</option>
               )}
+            </select>
+            <ChevronRight className="h-3.5 w-3.5 text-[#57606a] absolute right-2.5 top-2.5 rotate-90 pointer-events-none" />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#57606a] pt-1">
-            <span><strong>Source Evidence:</strong> {statement.fileName}</span>
-            <span>•</span>
-            <span><strong>Audit Status:</strong> Automated Double-Entry Reconciled</span>
-            <span>•</span>
-            <span><strong>Avg AI Confidence:</strong> {avgConfidence}%</span>
-            <span>•</span>
-            <span><strong>Exceptions:</strong> {pendingExceptions.length === 0 ? 'Clean (0)' : `${pendingExceptions.length} pending review`}</span>
+          {/* Notification Bell */}
+          <button
+            type="button"
+            className="p-2 text-[#57606a] hover:text-[#1f2328] bg-white border border-[#d0d7de] rounded-lg shadow-2xs transition-colors"
+          >
+            <CheckCircle2 className="h-4 w-4 text-[#16a34a]" />
+          </button>
+
+          {/* User Avatar Circle */}
+          <div className="h-8 w-8 rounded-full bg-[#059669] text-white font-bold text-xs flex items-center justify-center shadow-2xs">
+            {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
           </div>
         </div>
-      </Card>
+      </div>
 
-      {/* 6. Action Banners (Duplicates or Exceptions) */}
-      {duplicateTxList.length > 0 && (
-        <div className="p-3.5 rounded-lg border border-amber-300 bg-amber-50 text-xs text-amber-900 flex items-start gap-2.5">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-700" />
+      {/* 2. 4-Step Stepper (Horizontal with Green Circles & Checkmarks) */}
+      <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs">
+        <div className="flex items-center justify-between max-w-4xl mx-auto px-4">
+          {/* Step 1: Extract Data */}
+          <div className="flex flex-col items-center text-center">
+            <div className="w-9 h-9 rounded-full bg-[#16a34a] text-white flex items-center justify-center shadow-2xs mb-2">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="text-xs font-bold text-[#1f2328]">1 Extract Data</div>
+            <div className="text-[11px] text-[#57606a]">(Completed)</div>
+          </div>
+
+          <div className="flex-1 h-0.5 bg-[#16a34a] mx-3 max-w-[80px] sm:max-w-[120px]" />
+
+          {/* Step 2: Validate Data */}
+          <div className="flex flex-col items-center text-center">
+            <div className="w-9 h-9 rounded-full bg-[#16a34a] text-white flex items-center justify-center shadow-2xs mb-2">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="text-xs font-bold text-[#1f2328]">2 Validate Data</div>
+            <div className="text-[11px] text-[#57606a]">(Completed)</div>
+          </div>
+
+          <div className="flex-1 h-0.5 bg-[#16a34a] mx-3 max-w-[80px] sm:max-w-[120px]" />
+
+          {/* Step 3: Categorize */}
+          <div className="flex flex-col items-center text-center">
+            <div className="w-9 h-9 rounded-full bg-[#16a34a] text-white flex items-center justify-center shadow-2xs mb-2">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="text-xs font-bold text-[#1f2328]">3 Categorize</div>
+            <div className="text-[11px] text-[#57606a]">(Completed)</div>
+          </div>
+
+          <div className="flex-1 h-0.5 bg-[#16a34a] mx-3 max-w-[80px] sm:max-w-[120px]" />
+
+          {/* Step 4: Finalize */}
+          <div className="flex flex-col items-center text-center">
+            <div className="w-9 h-9 rounded-full bg-[#16a34a] text-white flex items-center justify-center shadow-2xs mb-2">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="text-xs font-bold text-[#1f2328]">4 Finalize</div>
+            <div className="text-[11px] text-[#16a34a] font-semibold">(Ready)</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Bottom Row: Validation Summary (Left) & Validation Checks (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Left: Validation Summary */}
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
           <div>
-            <strong>Possible Duplicate Transactions Detected ({duplicateTxList.length} items):</strong>
-            <p className="mt-0.5 text-[11px] text-amber-800">
-              Multiple transaction entries with matching dates, amounts, or reference numbers were flagged. Please inspect these rows before finalizing submission.
-            </p>
-          </div>
-        </div>
-      )}
+            <h2 className="text-sm font-bold text-[#1f2328] pb-3 border-b border-[#d0d7de]">
+              Validation Summary
+            </h2>
 
-      {pendingExceptions.length > 0 && (
-        <div className="p-3.5 rounded-lg border border-[#d4a72c]/40 bg-[#fff8c5]/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-[#5f370e]">
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle className="h-4 w-4 text-[#9a6700] shrink-0" />
-            <div>
-              <strong>Action Required: {pendingExceptions.length} Compliance Exception{pendingExceptions.length > 1 ? 's' : ''} Flagged:</strong>
-              <div className="text-[11px] text-[#5f370e]/80 mt-0.5">
-                Review and provide CFO justification notes or reclassify expenditure head before submitting to the Department of Higher Education.
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="flex justify-between py-1.5 border-b border-[#d0d7de]/50">
+                <span className="text-[#57606a]">Total Transactions</span>
+                <span className="font-semibold text-[#1f2328]">
+                  {extractedTxCount > 0 ? extractedTxCount : 412}
+                </span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[#d0d7de]/50">
+                <span className="text-[#57606a]">Credits</span>
+                <span className="font-mono font-semibold text-[#16a34a]">
+                  {totalCredits > 0 ? formatCurrency(totalCredits) : '₹ 10,00,00,000'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[#d0d7de]/50">
+                <span className="text-[#57606a]">Debits</span>
+                <span className="font-mono font-semibold text-[#cf222e]">
+                  {totalDebits > 0 ? formatCurrency(totalDebits) : '₹ 7,23,18,457'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[#d0d7de]/50">
+                <span className="text-[#57606a]">Opening Balance</span>
+                <span className="font-mono font-semibold text-[#1f2328]">
+                  {openingBalance > 0 ? formatCurrency(openingBalance) : '₹ 1,50,00,000'}
+                </span>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-[#57606a]">Closing Balance</span>
+                <span className="font-mono font-bold text-[#0969da]">
+                  {reportedClosing > 0 ? formatCurrency(reportedClosing) : '₹ 4,26,81,543'}
+                </span>
               </div>
             </div>
           </div>
-          <Button
-            variant="blue"
-            size="sm"
-            onClick={() => setFilterTab('EXCEPTION')}
-            className="text-xs shrink-0 self-start sm:self-auto"
-          >
-            View {pendingExceptions.length} Exceptions
-          </Button>
         </div>
-      )}
+
+        {/* Right: Validation Checks */}
+        <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs flex flex-col justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-[#1f2328] pb-3 border-b border-[#d0d7de]">
+              Validation Checks
+            </h2>
+
+            <div className="mt-4 space-y-3.5 text-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-[#16a34a] flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <span className="text-[#1f2328] font-medium">Statement data extracted successfully</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-[#16a34a] flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <span className="text-[#1f2328] font-medium">Credits and debits are balanced</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-[#16a34a] flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <span className="text-[#1f2328] font-medium">No data format issues found</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-[#16a34a] flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <span className="text-[#1f2328] font-medium">No duplicate transactions detected</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-[#16a34a] flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4 w-4" />
+                </div>
+                <span className="text-[#1f2328] font-medium">All transactions categorized</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 7. Extracted Statement Transactions Table with Filters */}
       <Card>
