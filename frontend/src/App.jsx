@@ -172,6 +172,15 @@ export default function App() {
               onTriggerToast={triggerToast}
             />
           )
+        case 'bank_accounts':
+          return (
+            <UnivBankAccountView
+              onSelectTab={setActiveTab}
+              onTriggerToast={triggerToast}
+              canEditReupload={false}
+              isGovLeader={true}
+            />
+          )
         case 'reports':
           return (
             <AdditionalReportsView

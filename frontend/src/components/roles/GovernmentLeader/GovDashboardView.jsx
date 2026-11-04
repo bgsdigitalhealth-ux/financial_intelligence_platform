@@ -420,16 +420,6 @@ export function GovDashboardView({ onSelectTab, onTriggerToast }) {
 
   return (
     <div className="space-y-4 pb-12">
-      {/* Top Breadcrumb Text */}
-      <div className="text-xs text-[#57606a]">
-        Viewing dashboard <span className="font-semibold text-[#1f2328]">01 - Leadership Dashboard</span>
-      </div>
-
-      {/* Demonstration Data Warning Pill */}
-      <div className="inline-flex items-center gap-2 rounded-md bg-[#fff8c5] border border-[#d4a72c]/40 px-3 py-1.5 text-xs text-[#5f370e] font-medium shadow-2xs">
-        <span className="text-amber-700 font-bold">DEMONSTRATION DATA — NOT OFFICIAL FINANCIAL RECORDS</span>
-      </div>
-
       {/* Portal Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
         <div className="flex items-start gap-3">

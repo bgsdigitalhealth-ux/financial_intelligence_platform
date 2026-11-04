@@ -416,16 +416,13 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
           {/* STEP 2: SELECT ROLE (Flowchart Step matching diagram "Select Role") */}
           {step === 'SELECT_ROLE' && authenticatedUser && (
             <div className="space-y-4">
-              <div className="text-center space-y-1 mb-2">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#dafbe1] border border-[#1a7f37]/40 text-[#1a7f37] mb-3">
-                  <Users className="h-6 w-6" />
+              <div className="text-center space-y-1 mb-3">
+                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#dafbe1] border border-[#1a7f37]/40 text-[#1a7f37] mb-2">
+                  <Users className="h-5 w-5" />
                 </div>
                 <h1 className="text-xl font-bold text-[#1f2328] tracking-tight">
                   Select Operational Role
                 </h1>
-                <p className="text-xs text-[#57606a]">
-                  Choose an authorized persona console to access corresponding data ledgers
-                </p>
               </div>
 
               {/* Authorization Error Banner (if unauthorized role clicked) */}
@@ -466,10 +463,10 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                             : 'border-[#d0d7de] bg-white hover:bg-[#f6f8fa]/60 cursor-pointer'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
                             {/* Custom Radio Circle */}
-                            <div className="mt-0.5">
+                            <div>
                               <div
                                 className={`h-4 w-4 rounded-full border flex items-center justify-center ${
                                   isSelected
@@ -481,19 +478,12 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
                               </div>
                             </div>
 
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs text-[#1f2328]">
-                                  {roleItem.title}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-[#57606a] leading-relaxed">
-                                {roleItem.scopeDescription}
-                              </p>
-                            </div>
+                            <span className="font-semibold text-xs text-[#1f2328]">
+                              {roleItem.title}
+                            </span>
                           </div>
 
-                          <div className="shrink-0 flex flex-col items-end gap-1">
+                          <div className="shrink-0 flex items-center gap-1">
                             {isAuthorized ? (
                               <Badge variant={roleItem.badgeVariant} className="text-[10px]">
                                 {roleItem.badge}
@@ -632,7 +622,7 @@ export function LoginPage({ onLoginSuccess, onTriggerToast }) {
 
       {/* Footer */}
       <footer className="border-t border-[#d0d7de] bg-white py-3 px-4 text-center text-xs text-[#57606a]">
-        GovFinanceIntel Platform • Password-Free 4-Digit Mock OTP Authentication Architecture
+        GovFinanceIntel Platform • Karnataka State Higher Education
       </footer>
     </div>
   )

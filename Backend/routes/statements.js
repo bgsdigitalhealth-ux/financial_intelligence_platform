@@ -283,6 +283,17 @@ router.post('/upload', upload.single('statementFile'), async (req, res) => {
 
     await db.createStatement(newStatement)
 
+    // Synchronize the bank account balance with the verified closing balance
+    try {
+      await db.updateBankAccount(account.id, {
+        currentBalance: statedClosingBalance,
+        lastReconciledQuarter: quarter,
+        lastReconciledDate: new Date().toISOString().slice(0, 10),
+      })
+    } catch (accUpdateErr) {
+      console.warn('[Bank Account Balance Update Warning]', accUpdateErr.message)
+    }
+
     // Automatically train FinBot on the uploaded statement data (Zero manual training needed)
     try {
       ragEngine.indexStatement(newStatement)

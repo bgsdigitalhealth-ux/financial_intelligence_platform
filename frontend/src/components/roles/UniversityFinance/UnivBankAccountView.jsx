@@ -50,6 +50,7 @@ export function UnivBankAccountView({
   onTriggerToast,
   initialOpenUpload = false,
   canEditReupload = true,
+  isGovLeader = false,
 }) {
   const {
     universities,
@@ -67,8 +68,23 @@ export function UnivBankAccountView({
   } = useFinancialData()
   const { currentUser } = useAuth()
 
-  // Identify the logged-in university dynamically
+  const isLeader =
+    isGovLeader ||
+    currentUser?.role === 'gov_leader' ||
+    currentUser?.primaryRole === 'gov_leader' ||
+    currentUser?.email === 'sec-higheredu@karnataka.gov.in'
+
+  const [selectedUnivId, setSelectedUnivId] = useState('')
+
+  // Identify the logged-in or inspected university dynamically
   const myUniversity = useMemo(() => {
+    if (isLeader) {
+      if (selectedUnivId) {
+        const u = universities.find((x) => x.id === selectedUnivId)
+        if (u) return u
+      }
+      return universities[0] || { id: 'univ-01', name: 'Visvesvaraya Technological University', code: 'VTU' }
+    }
     if (currentUser?.universityId) {
       const u = universities.find((x) => x.id === currentUser.universityId)
       if (u) return u
@@ -81,7 +97,7 @@ export function UnivBankAccountView({
       universities[0] ||
       { id: currentUser?.universityId || '', name: currentUser?.organization || 'College Enrolled', code: 'COL' }
     )
-  }, [universities, currentUser])
+  }, [universities, currentUser, isLeader, selectedUnivId])
 
   // Filter bank accounts strictly to this logged-in university
   const accounts = useMemo(() => {
@@ -441,6 +457,28 @@ export function UnivBankAccountView({
 
   return (
     <div className="space-y-6">
+      {isLeader && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-lg border border-[#d0d7de] shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Building className="h-4 w-4 text-[#0969da]" />
+            <span className="text-xs font-bold text-[#1f2328]">Statewide Institution Inspector:</span>
+          </div>
+          <select
+            value={myUniversity.id}
+            onChange={(e) => {
+              setSelectedUnivId(e.target.value)
+              setSelectedAccountId('')
+            }}
+            className="text-xs font-semibold border border-[#d0d7de] bg-[#f6f8fa] rounded px-3 py-1.5 text-[#1f2328] focus:border-[#0969da] focus:outline-none"
+          >
+            {universities.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.code})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       {/* 1. Header with Institution Scope */}
       <div className="rounded-lg border border-[#d0d7de] bg-white p-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-2xs">
         <div>
