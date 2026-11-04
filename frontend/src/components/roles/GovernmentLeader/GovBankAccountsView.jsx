@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Landmark,
   Search,
@@ -15,6 +15,10 @@ import {
   X,
   CreditCard,
   ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react'
 import { useFinancialData } from '@/context/FinancialDataContext'
 import { Badge } from '@/components/ui/Badge'
@@ -163,6 +167,20 @@ export function GovBankAccountsView({ onSelectTab, onTriggerToast }) {
       return matchesSearch
     })
   }, [allTransactionsList, searchQuery])
+
+  // Pagination for Transaction History in Government Admin
+  const [govTxPage, setGovTxPage] = useState(1)
+  const govTxPageSize = 25
+  const govTxTotalPages = Math.max(1, Math.ceil(filteredTransactions.length / govTxPageSize))
+
+  useEffect(() => {
+    setGovTxPage(1)
+  }, [searchQuery, activeSubTab])
+
+  const paginatedGovTransactions = useMemo(() => {
+    const start = (govTxPage - 1) * govTxPageSize
+    return filteredTransactions.slice(start, start + govTxPageSize)
+  }, [filteredTransactions, govTxPage, govTxPageSize])
 
   // Delete handler
   const handleDeleteAccount = async (account) => {
@@ -391,6 +409,7 @@ export function GovBankAccountsView({ onSelectTab, onTriggerToast }) {
                 ))}
               </tbody>
             </table>
+
           )}
         </div>
       )}
@@ -475,7 +494,8 @@ export function GovBankAccountsView({ onSelectTab, onTriggerToast }) {
               </p>
             </div>
           ) : (
-            <table className="w-full text-left text-xs">
+            <>
+              <table className="w-full text-left text-xs">
               <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
                 <tr>
                   <th className="py-3 px-3.5">Date</th>
@@ -488,7 +508,7 @@ export function GovBankAccountsView({ onSelectTab, onTriggerToast }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#d0d7de]">
-                {filteredTransactions.slice(0, 100).map((tx, idx) => {
+                {paginatedGovTransactions.map((tx, idx) => {
                   const isCredit = (tx.type || '').toUpperCase().includes('CREDIT') || (tx.type || '').toUpperCase() === 'CR'
                   return (
                     <tr key={tx.id || idx} className="hover:bg-[#f6f8fa]/80 transition-colors">
@@ -512,6 +532,64 @@ export function GovBankAccountsView({ onSelectTab, onTriggerToast }) {
                 })}
               </tbody>
             </table>
+
+            {filteredTransactions.length > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t border-[#d0d7de] bg-[#f6f8fa] text-xs text-[#57606a] gap-3">
+                <div>
+                  Showing <span className="font-semibold text-[#1f2328]">{((govTxPage - 1) * govTxPageSize) + 1}</span> to{' '}
+                  <span className="font-semibold text-[#1f2328]">
+                    {Math.min(govTxPage * govTxPageSize, filteredTransactions.length).toLocaleString('en-IN')}
+                  </span>{' '}
+                  of <span className="font-semibold text-[#1f2328]">{filteredTransactions.length.toLocaleString('en-IN')}</span> transactions
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={govTxPage === 1}
+                    onClick={() => setGovTxPage(1)}
+                    className="h-7 w-7 p-0 text-[#57606a] disabled:opacity-40 cursor-pointer"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={govTxPage === 1}
+                    onClick={() => setGovTxPage((p) => Math.max(1, p - 1))}
+                    className="h-7 px-2 text-xs text-[#57606a] disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                    Prev
+                  </Button>
+                  <span className="px-2 font-mono text-xs text-[#1f2328]">
+                    Page <span className="font-bold">{govTxPage}</span> of {govTxTotalPages}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={govTxPage >= govTxTotalPages}
+                    onClick={() => setGovTxPage((p) => Math.min(govTxTotalPages, p + 1))}
+                    className="h-7 px-2 text-xs text-[#57606a] disabled:opacity-40 cursor-pointer"
+                  >
+                    Next
+                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={govTxPage >= govTxTotalPages}
+                    onClick={() => setGovTxPage(govTxTotalPages)}
+                    className="h-7 w-7 p-0 text-[#57606a] disabled:opacity-40 cursor-pointer"
+                    title="Last Page"
+                  >
+                    <ChevronsRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       )}
@@ -679,3 +757,4 @@ export function GovBankAccountsView({ onSelectTab, onTriggerToast }) {
     </div>
   )
 }
+

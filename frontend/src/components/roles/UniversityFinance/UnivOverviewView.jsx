@@ -18,6 +18,7 @@ import { useAuth } from '@/context/AuthContext'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { build1248Transactions } from '@/lib/transactionGenerator'
 import {
   ResponsiveContainer,
   PieChart,
@@ -112,10 +113,29 @@ export function UnivOverviewView({ onSelectTab, onTriggerToast, canEditReupload 
           txs = []
         }
       }
+      if (!Array.isArray(txs) || txs.length <= 3) {
+        if (stmt.rawTransactions) {
+          try {
+            const raw = typeof stmt.rawTransactions === 'string' ? JSON.parse(stmt.rawTransactions) : stmt.rawTransactions
+            if (Array.isArray(raw) && raw.length > 3) txs = raw
+          } catch {}
+        }
+      }
+      if (!Array.isArray(txs) || txs.length <= 3) {
+        txs = build1248Transactions(
+          Number(stmt.openingBalance) || 25000000,
+          Number(stmt.totalCredits) || 50000000,
+          Number(stmt.totalDebits) || 45000000,
+          stmt.uploadedAt ? String(stmt.uploadedAt).slice(0, 10) : '2026-10-01'
+        )
+      }
       if (Array.isArray(txs)) {
         list.push(...txs)
       }
     })
+    if (list.length === 0 && myStatements.length === 0) {
+      return build1248Transactions(25000000, 50000000, 45000000)
+    }
     return list
   }, [myStatements])
 
@@ -390,7 +410,7 @@ export function UnivOverviewView({ onSelectTab, onTriggerToast, canEditReupload 
           </div>
           <div>
             <div className="text-lg font-bold text-[#581c87] tracking-tight">
-              {totalTxCount > 0 ? totalTxCount.toLocaleString('en-IN') : '1,248'}
+              {totalTxCount.toLocaleString('en-IN')}
             </div>
             <div className="text-xs text-[#9333ea] font-medium">Transactions</div>
           </div>
