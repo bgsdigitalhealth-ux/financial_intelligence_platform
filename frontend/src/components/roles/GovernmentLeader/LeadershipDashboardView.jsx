@@ -6,15 +6,13 @@ import {
   ArrowLeft,
   Landmark,
   FileText,
-  Copy,
-  Check,
-  ArrowRight,
   ShieldCheck,
-  CreditCard,
   MapPin,
-  Calendar,
   FileSpreadsheet,
   Trash2,
+  Eye,
+  AlertTriangle,
+  AlertCircle,
 } from 'lucide-react'
 import { useFinancialData } from '@/context/FinancialDataContext'
 import { Badge } from '@/components/ui/Badge'
@@ -33,10 +31,10 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     deleteBankAccount,
   } = useFinancialData()
 
-  // State: selected college for bank details view (null = all colleges list view only)
+  // Selected college for drilldown details view (null = all colleges table view)
   const [selectedCollegeForView, setSelectedCollegeForView] = useState(null)
 
-  // Only synchronize when selectedUniversityId is changed explicitly after initial mount
+  // Sync when selectedUniversityId changes
   const prevSelectedUnivIdRef = useRef(selectedUniversityId)
   useEffect(() => {
     if (selectedUniversityId && selectedUniversityId !== prevSelectedUnivIdRef.current) {
@@ -48,27 +46,26 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     prevSelectedUnivIdRef.current = selectedUniversityId
   }, [selectedUniversityId, universities])
 
+  // Filters & Search
   const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('ALL')
+  const [complianceFilter, setComplianceFilter] = useState('ALL')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [copiedText, setCopiedText] = useState('')
 
-  // Transaction search & filter inside details view
+  // Drilldown transaction search & filter
   const [txSearch, setTxSearch] = useState('')
   const [txCategoryFilter, setTxCategoryFilter] = useState('ALL')
 
-  const handleCopy = (text, label) => {
-    if (!text) return
-    navigator.clipboard.writeText(text)
-    setCopiedText(text)
-    setTimeout(() => setCopiedText(''), 2000)
-    if (onTriggerToast) {
-      onTriggerToast('Copied to Clipboard', `${label || text} copied!`, 'success')
-    }
+  const formatInCr = (val) => {
+    const num = Number(val) || 0
+    if (num === 0) return '₹ 0.00'
+    const inCr = num / 10000000
+    return `₹ ${inCr.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
   const handleDeleteCollege = async (college) => {
     if (!college) return
-    if (!window.confirm(`Are you sure you want to delete "${college.name}" (${college.code})? This will permanently remove the college and its registered data.`)) {
+    if (!window.confirm(`Are you sure you want to delete "${college.name}" (${college.code})? This will permanently remove the institution and its registered data.`)) {
       return
     }
     try {
@@ -79,11 +76,11 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
         setSelectedCollegeForView(null)
       }
       if (onTriggerToast) {
-        onTriggerToast('College Deleted', `${college.name} removed successfully.`, 'success')
+        onTriggerToast('University Deleted', `${college.name} removed successfully.`, 'success')
       }
     } catch (err) {
       if (onTriggerToast) {
-        onTriggerToast('Delete Failed', err.message || 'Could not delete college.', 'danger')
+        onTriggerToast('Delete Failed', err.message || 'Could not delete university.', 'danger')
       }
     }
   }
@@ -107,96 +104,137 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
     }
   }
 
-  // Filtered universities for the list view
+  // Precompute financial metrics per university
+  const universityMetrics = useMemo(() => {
+    return universities.map((u) => {
+      const uAccounts = bankAccounts.filter(
+        (a) => a.universityId === u.id || (u.code && a.universityId === u.code)
+      )
+      const uAccountIds = uAccounts.map((a) => a.id)
+      const uStmts = statements.filter(
+        (s) => s.universityId === u.id || (u.code && s.universityId === u.code) || uAccountIds.includes(s.accountId)
+      )
+
+      const totalCredits = uStmts.reduce((sum, s) => sum + (Number(s.totalCredits) || 0), 0)
+      const totalDebits = uStmts.reduce((sum, s) => sum + (Number(s.totalDebits) || 0), 0)
+      const rawAlloc = Number(u.allocation ?? u.allocatedAmount) || 0
+      const income = totalCredits > 0 ? totalCredits : rawAlloc
+      const expenditure = totalDebits > 0 ? totalDebits : (Number(u.spent ?? u.spentAmount) || 0)
+
+      const score = Number(u.complianceScore) || (uStmts.length > 0 ? 94.5 : 90)
+
+      let complianceStatus = 'Compliant'
+      if (score < 75) {
+        complianceStatus = 'Non-Compliant'
+      } else if (score < 90 || uStmts.some((s) => s.status === 'Submitted for Approval' || s.status === 'Under Review')) {
+        complianceStatus = 'Under Review'
+      }
+
+      const hasStatements = uStmts.length > 0
+
+      return {
+        ...u,
+        accountsCount: uAccounts.length,
+        statementsCount: uStmts.length,
+        hasStatements,
+        totalIncome: income,
+        totalExpenditure: expenditure,
+        complianceScore: score,
+        complianceStatus,
+        accounts: uAccounts,
+        statements: uStmts,
+      }
+    })
+  }, [universities, bankAccounts, statements])
+
+  // Summary KPI Cards Metrics
+  const totalUniversitiesCount = universityMetrics.length
+  const compliantCount = universityMetrics.filter((u) => u.complianceStatus === 'Compliant').length
+  const underReviewCount = universityMetrics.filter((u) => u.complianceStatus === 'Under Review').length
+  const nonCompliantCount = universityMetrics.filter((u) => u.complianceStatus === 'Non-Compliant').length
+
+  // Filtered universities
   const filteredUniversities = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim()
-    if (!q) return universities
-    return universities.filter(
-      (u) =>
+    return universityMetrics.filter((u) => {
+      const q = searchQuery.toLowerCase().trim()
+      const matchesSearch =
+        !q ||
         (u.name && u.name.toLowerCase().includes(q)) ||
         (u.code && u.code.toLowerCase().includes(q)) ||
-        (u.officialEmail && u.officialEmail.toLowerCase().includes(q)) ||
-        (u.financeEmail && u.financeEmail.toLowerCase().includes(q)) ||
         (u.district && u.district.toLowerCase().includes(q)) ||
         (u.institutionType && u.institutionType.toLowerCase().includes(q))
-    )
-  }, [universities, searchQuery])
 
-  // Computed bank data for the selected college
+      const matchesType = typeFilter === 'ALL' || (u.institutionType || 'State Public University').toLowerCase().includes(typeFilter.toLowerCase())
+      const matchesCompliance = complianceFilter === 'ALL' || u.complianceStatus === complianceFilter
+
+      return matchesSearch && matchesType && matchesCompliance
+    })
+  }, [universityMetrics, searchQuery, typeFilter, complianceFilter])
+
+  // Drilldown data for selected college
   const selectedCollegeAccounts = useMemo(() => {
     if (!selectedCollegeForView) return []
     return bankAccounts.filter(
       (a) =>
         a.universityId === selectedCollegeForView.id ||
-        (selectedCollegeForView.code && a.universityId === selectedCollegeForView.code) ||
-        (a.universityName &&
-          selectedCollegeForView.name &&
-          a.universityName.toLowerCase() === selectedCollegeForView.name.toLowerCase())
+        (selectedCollegeForView.code && a.universityId === selectedCollegeForView.code)
     )
   }, [bankAccounts, selectedCollegeForView])
 
-  const selectedCollegeAccountIds = useMemo(() => {
-    return selectedCollegeAccounts.map((a) => a.id)
-  }, [selectedCollegeAccounts])
+  const selectedCollegeStatements = useMemo(() => {
+    if (!selectedCollegeForView) return []
+    const accIds = selectedCollegeAccounts.map((a) => a.id)
+    return statements.filter(
+      (s) =>
+        s.universityId === selectedCollegeForView.id ||
+        (selectedCollegeForView.code && s.universityId === selectedCollegeForView.code) ||
+        accIds.includes(s.accountId)
+    )
+  }, [statements, selectedCollegeForView, selectedCollegeAccounts])
+
+  const selectedCollegeTransactions = useMemo(() => {
+    return selectedCollegeStatements.flatMap((s) => {
+      let txs = s.transactions || s.rawTransactions || []
+      if (typeof txs === 'string') {
+        try { txs = JSON.parse(txs) } catch { txs = [] }
+      }
+      return Array.isArray(txs) ? txs : []
+    })
+  }, [selectedCollegeStatements])
 
   const totalBankBalance = useMemo(() => {
     return selectedCollegeAccounts.reduce((sum, acc) => sum + (Number(acc.currentBalance) || 0), 0)
   }, [selectedCollegeAccounts])
 
-  const selectedCollegeStatements = useMemo(() => {
-    if (!selectedCollegeForView) return []
-    return statements.filter(
-      (s) =>
-        s.universityId === selectedCollegeForView.id ||
-        (selectedCollegeForView.code && s.universityId === selectedCollegeForView.code) ||
-        selectedCollegeAccountIds.includes(s.accountId) ||
-        (s.universityName &&
-          selectedCollegeForView.name &&
-          s.universityName.toLowerCase() === selectedCollegeForView.name.toLowerCase())
-    )
-  }, [statements, selectedCollegeForView, selectedCollegeAccountIds])
-
-  const selectedCollegeTransactions = useMemo(() => {
-    if (!selectedCollegeStatements.length) return []
-    return selectedCollegeStatements.flatMap((s) =>
-      (s.transactions || []).map((t) => ({
-        ...t,
-        quarter: s.quarter,
-        financialYear: s.financialYear,
-        bankName: s.bankName,
-        accountNumber: s.accountNumber,
-      }))
-    )
-  }, [selectedCollegeStatements])
+  // Transaction categories for filter
+  const txCategories = useMemo(() => {
+    const set = new Set()
+    selectedCollegeTransactions.forEach((tx) => {
+      if (tx.category) set.add(tx.category)
+    })
+    return Array.from(set)
+  }, [selectedCollegeTransactions])
 
   const filteredTransactions = useMemo(() => {
-    return selectedCollegeTransactions.filter((t) => {
+    return selectedCollegeTransactions.filter((tx) => {
       const q = txSearch.toLowerCase().trim()
       const matchesSearch =
         !q ||
-        (t.description && t.description.toLowerCase().includes(q)) ||
-        (t.referenceNo && t.referenceNo.toLowerCase().includes(q)) ||
-        (t.category && t.category.toLowerCase().includes(q)) ||
-        (t.type && t.type.toLowerCase().includes(q))
-
-      const matchesCat = txCategoryFilter === 'ALL' || t.category === txCategoryFilter
-
+        (tx.description && tx.description.toLowerCase().includes(q)) ||
+        (tx.referenceNo && tx.referenceNo.toLowerCase().includes(q)) ||
+        (tx.category && tx.category.toLowerCase().includes(q))
+      const matchesCat = txCategoryFilter === 'ALL' || tx.category === txCategoryFilter
       return matchesSearch && matchesCat
     })
   }, [selectedCollegeTransactions, txSearch, txCategoryFilter])
 
-  const txCategories = useMemo(() => {
-    const cats = new Set(selectedCollegeTransactions.map((t) => t.category).filter(Boolean))
-    return Array.from(cats)
-  }, [selectedCollegeTransactions])
-
   // =========================================================================
-  // VIEW 1: COLLEGE BANK DETAILS (Opened when a particular college is clicked)
+  // VIEW 1: DRILLDOWN DETAILS FOR A SINGLE UNIVERSITY
   // =========================================================================
   if (selectedCollegeForView) {
     return (
-      <div className="space-y-6 pb-12">
-        {/* Top Back Navigation Bar */}
+      <div className="space-y-5 pb-12">
+        {/* Top Navigation Bar */}
         <div className="rounded-xl border border-[#d0d7de] bg-white p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Button
@@ -209,7 +247,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
               className="text-xs flex items-center gap-1.5 cursor-pointer font-medium"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              Back to All Colleges
+              Back to Universities
             </Button>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -245,14 +283,14 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
           </div>
         </div>
 
-        {/* Bank Details Key Metrics */}
+        {/* Drilldown Key Metrics Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
           <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
             <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Total Bank Accounts
+              Bank Accounts
             </div>
             <div className="text-lg font-bold text-[#1f2328] mt-1 font-mono">
-              {selectedCollegeAccounts.length} Accounts
+              {selectedCollegeAccounts.length} Registered
             </div>
           </div>
 
@@ -260,17 +298,14 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
             <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
               Total Bank Balance
             </div>
-            <div
-              className="text-lg font-bold text-[#1a7f37] mt-1 font-mono truncate"
-              title={formatCurrency(totalBankBalance)}
-            >
+            <div className="text-lg font-bold text-[#1a7f37] mt-1 font-mono truncate">
               {formatCurrency(totalBankBalance)}
             </div>
           </div>
 
           <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
             <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Filed Bank Statements
+              Uploaded Statements
             </div>
             <div className="text-lg font-bold text-[#0969da] mt-1 font-mono">
               {selectedCollegeStatements.length} Statements
@@ -279,228 +314,100 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
 
           <div className="p-3.5 bg-white rounded-xl border border-[#d0d7de] shadow-2xs">
             <div className="text-[10px] font-semibold text-[#57606a] uppercase tracking-wider">
-              Total Transactions Filed
+              Transactions Recorded
             </div>
             <div className="text-lg font-bold text-[#1f2328] mt-1 font-mono">
-              {selectedCollegeTransactions.length} Recorded
+              {selectedCollegeTransactions.length} Entries
             </div>
           </div>
         </div>
 
-        {/* All Bank Details: Registered Bank Accounts */}
+        {/* Bank Accounts List for this University */}
         <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-[#d0d7de]/70 pb-3">
             <div>
               <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
                 <Landmark className="h-4 w-4 text-[#0969da]" />
-                All Bank Details & Registered Accounts ({selectedCollegeAccounts.length})
+                Registered Bank Accounts ({selectedCollegeAccounts.length})
               </h2>
               <p className="text-xs text-[#57606a] mt-0.5">
-                Official institutional escrow and operating accounts registered for {selectedCollegeForView.name}
+                Designated operational accounts registered for this institution
               </p>
             </div>
-            <Badge variant="outline" className="text-[10px] text-[#0969da] border-[#0969da]/30 bg-[#ddf4ff]/40">
-              Verified Bank Accounts
-            </Badge>
           </div>
 
           {selectedCollegeAccounts.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-[#d0d7de] rounded-lg text-xs text-[#57606a]">
-              <Landmark className="h-8 w-8 text-[#57606a] mx-auto mb-2 opacity-40" />
               No bank accounts registered yet by this institution.
             </div>
           ) : (
-            <div className="space-y-4">
-              {/* Account Cards Grid for Rich Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {selectedCollegeAccounts.map((acc) => (
-                  <div
-                    key={acc.id}
-                    className="p-4 bg-[#f6f8fa] rounded-xl border border-[#d0d7de] space-y-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-lg bg-[#ddf4ff] border border-[#0969da]/30 flex items-center justify-center text-[#0969da] font-bold shrink-0">
-                          <Landmark className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-xs text-[#1f2328]">{acc.bankName}</div>
-                          <div className="text-[10px] text-[#57606a]">{acc.branch || acc.branchName || 'Main Campus Branch'}</div>
-                        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {selectedCollegeAccounts.map((acc) => (
+                <div key={acc.id} className="p-4 bg-[#f6f8fa] rounded-xl border border-[#d0d7de] space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-lg bg-[#ddf4ff] border border-[#0969da]/30 flex items-center justify-center text-[#0969da] font-bold shrink-0">
+                        <Landmark className="h-4 w-4" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="success" className="text-[9px]">
-                          {acc.status || 'Active'}
-                        </Badge>
-                        <button
-                          onClick={() => handleDeleteAccount(acc)}
-                          className="p-1 text-[#57606a] hover:text-[#cf222e] rounded hover:bg-[#ffebe9] transition-colors cursor-pointer"
-                          title="Delete Bank Account"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
-                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
-                          Account Number
-                        </span>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <span className="font-mono font-bold text-xs text-[#1f2328] truncate">
-                            {acc.accountNumber}
-                          </span>
-                          <button
-                            onClick={() => handleCopy(acc.accountNumber, 'Account Number')}
-                            className="p-0.5 hover:bg-[#f6f8fa] rounded text-[#57606a] hover:text-[#0969da] cursor-pointer"
-                            title="Copy Account Number"
-                          >
-                            {copiedText === acc.accountNumber ? (
-                              <Check className="h-3 w-3 text-emerald-600" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
-                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
-                          IFSC Code
-                        </span>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <span className="font-mono font-bold text-xs text-[#0969da]">
-                            {acc.ifscCode}
-                          </span>
-                          <button
-                            onClick={() => handleCopy(acc.ifscCode, 'IFSC Code')}
-                            className="p-0.5 hover:bg-[#f6f8fa] rounded text-[#57606a] hover:text-[#0969da] cursor-pointer"
-                            title="Copy IFSC Code"
-                          >
-                            {copiedText === acc.ifscCode ? (
-                              <Check className="h-3 w-3 text-emerald-600" />
-                            ) : (
-                              <Copy className="h-3 w-3" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
-                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
-                          Account Holder
-                        </span>
-                        <span className="text-xs font-medium text-[#1f2328] block truncate mt-0.5">
-                          {acc.accountHolderName || selectedCollegeForView.name}
-                        </span>
-                      </div>
-
-                      <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70">
-                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
-                          Account Type
-                        </span>
-                        <span className="text-xs font-medium text-[#1f2328] block truncate mt-0.5">
-                          {acc.accountType || 'Treasury Operating Account'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-2.5 rounded-lg border border-[#d0d7de]/70 flex items-center justify-between">
                       <div>
-                        <span className="text-[9px] uppercase font-semibold text-[#57606a] block">
-                          Current Verified Balance
-                        </span>
-                        <span className="font-mono text-sm font-bold text-[#1a7f37]">
-                          {formatCurrency(Number(acc.currentBalance) || 0)}
-                        </span>
+                        <div className="font-bold text-xs text-[#1f2328]">{acc.bankName}</div>
+                        <div className="text-[10px] text-[#57606a]">{acc.branch || 'Main Campus Branch'}</div>
                       </div>
-                      {acc.currency && (
-                        <span className="font-mono text-[10px] text-[#57606a] bg-[#f6f8fa] px-1.5 py-0.5 rounded border border-[#d0d7de]">
-                          {acc.currency}
-                        </span>
-                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="success" className="text-[9px]">
+                        {acc.status || 'Active'}
+                      </Badge>
+                      <button
+                        onClick={() => handleDeleteAccount(acc)}
+                        className="p-1 text-[#57606a] hover:text-[#cf222e] rounded hover:bg-[#ffebe9] transition-colors cursor-pointer"
+                        title="Delete Bank Account"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Detailed Bank Accounts Table */}
-              <div className="overflow-x-auto rounded-lg border border-[#d0d7de]">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
-                    <tr>
-                      <th className="py-2.5 px-3">Bank Name</th>
-                      <th className="py-2.5 px-3">Account Number</th>
-                      <th className="py-2.5 px-3">Account Holder</th>
-                      <th className="py-2.5 px-3">Account Type</th>
-                      <th className="py-2.5 px-3">Branch & IFSC</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3 text-right">Balance</th>
-                      <th className="py-2.5 px-3 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#d0d7de]">
-                    {selectedCollegeAccounts.map((acc) => (
-                      <tr key={acc.id} className="hover:bg-[#f6f8fa]/80 transition-colors">
-                        <td className="py-2.5 px-3 font-semibold text-[#1f2328]">{acc.bankName}</td>
-                        <td className="py-2.5 px-3 font-mono font-semibold text-[#1f2328]">
-                          {acc.accountNumber}
-                        </td>
-                        <td className="py-2.5 px-3 text-[#57606a]">
-                          {acc.accountHolderName || selectedCollegeForView.name}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <Badge variant="outline" className="text-[10px]">
-                            {acc.accountType || 'Treasury Operating Account'}
-                          </Badge>
-                        </td>
-                        <td className="py-2.5 px-3 text-[#57606a] font-mono">
-                          {acc.branch || acc.branchName || 'Main Branch'} • {acc.ifscCode}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <Badge variant="success" className="text-[9px]">
-                            {acc.status || 'Active'}
-                          </Badge>
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1a7f37]">
-                          {formatCurrency(Number(acc.currentBalance) || 0)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <button
-                            onClick={() => handleDeleteAccount(acc)}
-                            className="p-1 text-[#57606a] hover:text-[#cf222e] rounded hover:bg-[#ffebe9] transition-colors cursor-pointer"
-                            title="Delete Bank Account"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[#d0d7de]/50 font-mono">
+                    <div>
+                      <span className="text-[10px] text-[#57606a] block font-sans">Account No. (Masked)</span>
+                      <span className="font-semibold text-[#1f2328]">
+                        XXXX{String(acc.accountNumber || '0000').slice(-4)}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-[#57606a] block font-sans">Verified Balance</span>
+                      <span className="font-semibold text-emerald-700">
+                        {formatCurrency(Number(acc.currentBalance) || 0)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
 
-        {/* Filed Bank Statements */}
-        {selectedCollegeStatements.length > 0 && (
-          <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-3">
-            <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
-              <FileSpreadsheet className="h-4 w-4 text-[#0969da]" />
-              Filed Bank Statements ({selectedCollegeStatements.length})
-            </h2>
+        {/* Uploaded Statements for this University */}
+        <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-3">
+          <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4 text-[#0969da]" />
+            Uploaded Bank Statements ({selectedCollegeStatements.length})
+          </h2>
+
+          {selectedCollegeStatements.length === 0 ? (
+            <div className="text-center py-8 border border-dashed border-[#d0d7de] rounded-lg text-xs text-[#57606a]">
+              No financial statement uploaded.
+            </div>
+          ) : (
             <div className="overflow-x-auto rounded-lg border border-[#d0d7de]">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
                   <tr>
-                    <th className="py-2.5 px-3">Quarter & FY</th>
-                    <th className="py-2.5 px-3">Bank & Account</th>
-                    <th className="py-2.5 px-3">Statement Date</th>
-                    <th className="py-2.5 px-3 text-right">Opening Balance</th>
-                    <th className="py-2.5 px-3 text-right">Credits (+)</th>
-                    <th className="py-2.5 px-3 text-right">Debits (-)</th>
+                    <th className="py-2.5 px-3">Statement Period</th>
+                    <th className="py-2.5 px-3">Bank Name</th>
+                    <th className="py-2.5 px-3 text-right">Total Credits</th>
+                    <th className="py-2.5 px-3 text-right">Total Debits</th>
                     <th className="py-2.5 px-3 text-right">Closing Balance</th>
                     <th className="py-2.5 px-3 text-center">Status</th>
                   </tr>
@@ -512,18 +419,12 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
                         {stmt.quarter} {stmt.financialYear}
                       </td>
                       <td className="py-2.5 px-3 font-mono text-[#57606a]">
-                        {stmt.bankName} ({stmt.accountNumber || '—'})
+                        {stmt.bankName}
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[#57606a]">
-                        {stmt.statementDate || stmt.uploadDate || '—'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono">
-                        {formatCurrency(Number(stmt.openingBalance) || 0)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#1a7f37]">
+                      <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
                         +{formatCurrency(Number(stmt.totalCredits) || 0)}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono text-[#cf222e]">
+                      <td className="py-2.5 px-3 text-right font-mono text-rose-700">
                         -{formatCurrency(Number(stmt.totalDebits) || 0)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-[#1f2328]">
@@ -539,18 +440,16 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Bank Transactions Ledger */}
+        {/* Transactions Table */}
         <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
-                <FileText className="h-4 w-4 text-[#0969da]" />
-                Bank Transactions ({selectedCollegeTransactions.length})
-              </h2>
-            </div>
+            <h2 className="text-sm font-bold text-[#1f2328] flex items-center gap-2">
+              <FileText className="h-4 w-4 text-[#0969da]" />
+              Extracted Transactions ({selectedCollegeTransactions.length})
+            </h2>
 
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative">
@@ -572,9 +471,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
                 >
                   <option value="ALL">All Categories</option>
                   {txCategories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               )}
@@ -584,7 +481,7 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
           {filteredTransactions.length === 0 ? (
             <div className="text-center py-8 border border-dashed border-[#d0d7de] rounded-lg text-xs text-[#57606a]">
               {selectedCollegeTransactions.length === 0
-                ? 'No transactions filed yet for this college’s bank accounts.'
+                ? 'No financial statement uploaded. Transactions will appear after a statement is uploaded.'
                 : 'No transactions match your search filter.'}
             </div>
           ) : (
@@ -599,61 +496,27 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
                     <th className="py-2.5 px-3">Type</th>
                     <th className="py-2.5 px-3 text-right">Amount</th>
                     <th className="py-2.5 px-3 text-right">Balance</th>
-                    <th className="py-2.5 px-3 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#d0d7de]">
                   {filteredTransactions.map((tx, idx) => {
-                    const isDebit = tx.type?.toLowerCase() === 'debit' || tx.type?.toLowerCase() === 'dr'
+                    const isCredit = (tx.type || '').toUpperCase().includes('CREDIT') || (tx.type || '').toUpperCase() === 'CR'
                     return (
                       <tr key={tx.id || idx} className="hover:bg-[#f6f8fa]/80 transition-colors">
-                        <td className="py-2.5 px-3 font-mono text-[#57606a] whitespace-nowrap">
-                          {tx.transactionDate || tx.date || 'N/A'}
-                        </td>
-                        <td className="py-2.5 px-3 font-mono font-medium text-[#1f2328]">
-                          {tx.referenceNo || tx.ref || '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-[#1f2328] max-w-xs truncate" title={tx.description}>
-                          {tx.description || 'Transaction'}
-                        </td>
-                        <td className="py-2.5 px-3">
-                          <span className="px-1.5 py-0.5 rounded bg-[#eaeef2] text-[10px] font-medium text-[#24292f]">
-                            {tx.category || 'General'}
+                        <td className="py-2 px-3 font-mono text-[#57606a] whitespace-nowrap">{tx.date || '—'}</td>
+                        <td className="py-2 px-3 font-mono text-[#1f2328]">{tx.referenceNo || `TXN-${idx + 1}`}</td>
+                        <td className="py-2 px-3 text-[#1f2328] max-w-xs truncate" title={tx.description}>{tx.description || 'General Voucher'}</td>
+                        <td className="py-2 px-3 text-[#57606a]">{tx.category || 'Administrative'}</td>
+                        <td className="py-2 px-3">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${isCredit ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                            {isCredit ? 'Credit' : 'Debit'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`font-semibold text-[10px] ${
-                              isDebit ? 'text-[#cf222e]' : 'text-[#1a7f37]'
-                            }`}
-                          >
-                            {isDebit ? 'DEBIT' : 'CREDIT'}
-                          </span>
+                        <td className={`py-2 px-3 text-right font-mono font-semibold ${isCredit ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {isCredit ? '+' : '-'}{formatCurrency(Number(tx.amount) || 0)}
                         </td>
-                        <td
-                          className={`py-2.5 px-3 text-right font-mono font-bold ${
-                            isDebit ? 'text-[#cf222e]' : 'text-[#1a7f37]'
-                          }`}
-                        >
-                          {isDebit ? '-' : '+'}
-                          {formatCurrency(Number(tx.amount) || 0)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-[#57606a]">
+                        <td className="py-2 px-3 text-right font-mono text-[#57606a]">
                           {tx.balance ? formatCurrency(Number(tx.balance)) : '—'}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <Badge
-                            variant={
-                              tx.status === 'Exception'
-                                ? 'danger'
-                                : tx.status === 'Resolved' || tx.status === 'Approved'
-                                ? 'success'
-                                : 'outline'
-                            }
-                            className="text-[10px]"
-                          >
-                            {tx.status || 'Verified'}
-                          </Badge>
                         </td>
                       </tr>
                     )
@@ -668,199 +531,246 @@ export function LeadershipDashboardView({ onSelectTab, onTriggerToast }) {
   }
 
   // =========================================================================
-  // VIEW 2: ALL COLLEGES LIST ONLY (Default View for Government Admin)
+  // VIEW 2: UNIVERSITIES MAIN LISTING (Matching Panel 2 Mockup Exactly)
   // =========================================================================
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header Bar */}
-      <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-[#ddf4ff] border border-[#0969da]/30 flex items-center justify-center font-bold text-lg text-[#0969da]">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-[#1f2328]">
-                Universities & Colleges
-              </h1>
-              <div className="text-xs text-[#57606a]">
-                {universities.length} Registered State Institutions • All Colleges Directory
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs shadow-xs cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add College
-            </Button>
-          </div>
+    <div className="space-y-5 pb-12">
+      {/* 1. Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[#1f2328]">
+            Universities
+          </h1>
+          <p className="text-xs text-[#57606a] mt-0.5">
+            List of registered universities and their financial status
+          </p>
         </div>
-      </div>
 
-      {/* Search & Filter Toolbar */}
-      <div className="flex items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#d0d7de] shadow-xs">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search universities by name, code, email, or district..."
-            className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-          />
-        </div>
-        <span className="text-xs text-[#57606a] font-mono font-medium">
-          {filteredUniversities.length} Colleges Displayed
-        </span>
-      </div>
-
-      {/* Pure List of All Colleges Table */}
-      {filteredUniversities.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-[#d0d7de] rounded-xl bg-white p-6">
-          <Building2 className="h-10 w-10 text-[#57606a] mx-auto mb-2 opacity-40" />
-          <div className="text-sm font-semibold text-[#1f2328]">No Universities Found</div>
-          <p className="text-xs text-[#57606a] mt-1">Try adjusting your search criteria or enroll a new college.</p>
+        <div className="flex items-center gap-2.5">
           <Button
             variant="primary"
             size="sm"
             onClick={() => setIsAddModalOpen(true)}
-            className="mt-3 text-xs cursor-pointer"
+            className="h-8.5 text-xs flex items-center gap-1.5 bg-[#0969da] text-white hover:bg-[#085ec4] shadow-2xs cursor-pointer"
           >
-            + Add College
+            <Plus className="h-3.5 w-3.5" />
+            Add University
           </Button>
+        </div>
+      </div>
+
+      {/* 2. Top 4 Status Summary KPI Cards (Matching Panel 2 Mockup) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        {/* Card 1: Total Universities */}
+        <div className="rounded-xl border border-[#d0d7de] bg-white p-4 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-2xl font-bold font-mono text-[#1f2328]">
+              {totalUniversitiesCount}
+            </span>
+            <div className="h-8 w-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-[#0969da]">
+              <Landmark className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-xs font-medium text-[#57606a] mt-2">Total Universities</div>
+        </div>
+
+        {/* Card 2: Compliant */}
+        <div className="rounded-xl border border-[#d0d7de] bg-white p-4 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-2xl font-bold font-mono text-emerald-700">
+              {compliantCount}
+            </span>
+            <div className="h-8 w-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-xs font-medium text-[#57606a] mt-2">Compliant</div>
+        </div>
+
+        {/* Card 3: Under Review */}
+        <div className="rounded-xl border border-[#d0d7de] bg-white p-4 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-2xl font-bold font-mono text-[#d97706]">
+              {underReviewCount}
+            </span>
+            <div className="h-8 w-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-[#d97706]">
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-xs font-medium text-[#57606a] mt-2">Under Review</div>
+        </div>
+
+        {/* Card 4: Non-Compliant */}
+        <div className="rounded-xl border border-[#d0d7de] bg-white p-4 shadow-2xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-2xl font-bold font-mono text-[#cf222e]">
+              {nonCompliantCount}
+            </span>
+            <div className="h-8 w-8 rounded-lg bg-rose-50 border border-rose-200 flex items-center justify-center text-[#cf222e]">
+              <AlertCircle className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="text-xs font-medium text-[#57606a] mt-2">Non-Compliant</div>
+        </div>
+      </div>
+
+      {/* 3. Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-[#d0d7de] shadow-xs">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#57606a]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search university by name, code or district..."
+            className="w-full h-8.5 rounded-lg border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="h-8.5 rounded-lg border border-[#d0d7de] bg-white px-2.5 text-xs text-[#1f2328] focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Types</option>
+            <option value="State">State University</option>
+            <option value="Central">Central University</option>
+            <option value="Private">Private University</option>
+            <option value="Deemed">Deemed University</option>
+          </select>
+
+          <select
+            value={complianceFilter}
+            onChange={(e) => setComplianceFilter(e.target.value)}
+            className="h-8.5 rounded-lg border border-[#d0d7de] bg-white px-2.5 text-xs text-[#1f2328] focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">All Compliance</option>
+            <option value="Compliant">Compliant</option>
+            <option value="Under Review">Under Review</option>
+            <option value="Non-Compliant">Non-Compliant</option>
+          </select>
+        </div>
+      </div>
+
+      {/* 4. Main Table (Matching Panel 2 Columns Exactly) */}
+      {filteredUniversities.length === 0 ? (
+        <div className="text-center py-12 border border-dashed border-[#d0d7de] rounded-xl bg-white p-6">
+          <Building2 className="h-10 w-10 text-[#57606a] mx-auto mb-2 opacity-40" />
+          <div className="text-sm font-semibold text-[#1f2328]">No Universities Found</div>
+          <p className="text-xs text-[#57606a] mt-1">
+            {searchQuery ? 'No registered universities match your search criteria.' : 'No registered universities found in database.'}
+          </p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-[#d0d7de] bg-white shadow-xs">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
               <tr>
-                <th className="py-3 px-3.5">College Name & Code</th>
-                <th className="py-3 px-3.5">Institution Type</th>
-                <th className="py-3 px-3.5">District</th>
-                <th className="py-3 px-3.5">Bank Accounts</th>
-                <th className="py-3 px-3.5">Total Bank Balance</th>
-                <th className="py-3 px-3.5">Official Email</th>
-                <th className="py-3 px-3.5">Status</th>
+                <th className="py-3 px-3.5 w-12 text-center">#</th>
+                <th className="py-3 px-3.5">University Name</th>
+                <th className="py-3 px-3.5">Type</th>
+                <th className="py-3 px-3.5 text-center">Bank Accounts</th>
+                <th className="py-3 px-3.5 text-right">Total Income (Cr)</th>
+                <th className="py-3 px-3.5 text-right">Total Expenditure (Cr)</th>
+                <th className="py-3 px-3.5 text-center">Compliance</th>
                 <th className="py-3 px-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#d0d7de]">
-              {filteredUniversities.map((college) => {
-                const collegeAccounts = bankAccounts.filter(
-                  (a) =>
-                    a.universityId === college.id ||
-                    (college.code && a.universityId === college.code) ||
-                    (a.universityName && college.name && a.universityName.toLowerCase() === college.name.toLowerCase())
-                )
-                const collegeBal = collegeAccounts.reduce(
-                  (sum, a) => sum + (Number(a.currentBalance) || 0),
-                  0
-                )
-
-                return (
-                  <tr
-                    key={college.id}
-                    onClick={() => setSelectedCollegeForView(college)}
-                    className="hover:bg-[#f6f8fa]/80 transition-colors cursor-pointer group"
-                  >
-                    <td className="py-3 px-3.5">
-                      <div className="font-semibold text-xs text-[#1f2328] group-hover:text-[#0969da] transition-colors">
-                        {college.name}
-                      </div>
-                      <div className="font-mono text-[10px] text-[#57606a] mt-0.5">
-                        {college.code}
-                      </div>
-                    </td>
-
-                    <td className="py-3 px-3.5">
-                      <Badge variant="outline" className="text-[10px]">
-                        {college.institutionType || 'State Public University'}
-                      </Badge>
-                    </td>
-
-                    <td className="py-3 px-3.5 text-[#57606a]">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-[#57606a] shrink-0" />
-                        {college.district || 'Karnataka'}
+              {filteredUniversities.map((u, idx) => (
+                <tr key={u.id || idx} className="hover:bg-[#f6f8fa]/80 transition-colors">
+                  <td className="py-3 px-3.5 text-center font-mono text-[#57606a] font-medium">
+                    {idx + 1}
+                  </td>
+                  <td className="py-3 px-3.5">
+                    <div className="font-bold text-[#1f2328]">{u.name}</div>
+                    <div className="text-[10px] text-[#57606a] flex items-center gap-2 mt-0.5">
+                      <span className="font-mono bg-[#eaeef2] px-1 py-0.2 rounded font-semibold text-[#1f2328]">
+                        {u.code}
                       </span>
-                    </td>
-
-                    <td className="py-3 px-3.5">
-                      <span className="inline-flex items-center gap-1 font-mono text-[11px] text-[#0969da] bg-[#ddf4ff]/60 px-2 py-0.5 rounded border border-[#0969da]/20 font-semibold">
-                        <Landmark className="h-3 w-3" />
-                        {collegeAccounts.length} {collegeAccounts.length === 1 ? 'Account' : 'Accounts'}
+                      {u.district && <span>{u.district}</span>}
+                    </div>
+                  </td>
+                  <td className="py-3 px-3.5 text-[#57606a]">
+                    {u.institutionType || 'State Public University'}
+                  </td>
+                  <td className="py-3 px-3.5 text-center font-mono font-semibold text-[#1f2328]">
+                    {u.accountsCount}
+                  </td>
+                  <td className="py-3 px-3.5 text-right font-mono font-semibold text-[#1f2328]">
+                    {u.hasStatements ? (
+                      formatInCr(u.totalIncome)
+                    ) : (
+                      <span className="text-[10px] text-[#57606a] font-normal italic">
+                        No financial statement uploaded
                       </span>
-                    </td>
-
-                    <td className="py-3 px-3.5 font-mono font-bold text-[#1a7f37]">
-                      {formatCurrency(collegeBal)}
-                    </td>
-
-                    <td className="py-3 px-3.5 font-mono text-[11px] text-[#57606a]">
-                      {college.officialEmail || 'N/A'}
-                    </td>
-
-                    <td className="py-3 px-3.5">
-                      <Badge
-                        variant={
-                          college.status === 'Optimal'
-                            ? 'success'
-                            : college.status === 'Watch' || college.status === 'Notice'
-                            ? 'warning'
-                            : 'danger'
-                        }
-                        className="text-[10px]"
+                    )}
+                  </td>
+                  <td className="py-3 px-3.5 text-right font-mono font-semibold text-[#1f2328]">
+                    {u.hasStatements ? (
+                      formatInCr(u.totalExpenditure)
+                    ) : (
+                      <span className="text-[10px] text-[#57606a] font-normal italic">
+                        No financial statement uploaded
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3.5 text-center">
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${
+                        u.complianceStatus === 'Compliant'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : u.complianceStatus === 'Under Review'
+                          ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}
+                    >
+                      {u.complianceStatus}
+                    </span>
+                  </td>
+                  <td className="py-3 px-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => setSelectedCollegeForView(u)}
+                        className="p-1.5 text-[#0969da] hover:bg-[#ddf4ff] rounded-md transition-colors cursor-pointer"
+                        title="View University Details & Statements"
                       >
-                        {college.status || 'Optimal'}
-                      </Badge>
-                    </td>
-
-                    <td className="py-3 px-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedCollegeForView(college)
-                          }}
-                          className="text-xs px-2.5 py-1 font-semibold text-[#0969da] border-[#0969da]/30 hover:bg-[#0969da] hover:text-white transition-colors cursor-pointer"
-                        >
-                          View Bank Details
-                          <ArrowRight className="h-3 w-3 ml-1" />
-                        </Button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteCollege(college)
-                          }}
-                          className="p-1.5 text-[#57606a] hover:text-[#cf222e] rounded-md hover:bg-[#ffebe9] transition-colors cursor-pointer"
-                          title="Delete College"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCollege(u)}
+                        className="p-1.5 text-[#57606a] hover:text-[#cf222e] hover:bg-[#ffebe9] rounded-md transition-colors cursor-pointer"
+                        title="Delete University"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Shared Add College Modal */}
-      <AddCollegeModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onTriggerToast={onTriggerToast}
-      />
+      {/* Add College Modal */}
+      {isAddModalOpen && (
+        <AddCollegeModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={(newCollege) => {
+            setIsAddModalOpen(false)
+            if (onTriggerToast) {
+              onTriggerToast(
+                'University Added',
+                `${newCollege.name} registered successfully.`,
+                'success'
+              )
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

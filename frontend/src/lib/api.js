@@ -186,6 +186,18 @@ export const api = {
     return res.json()
   },
 
+  async getGovernmentOverview() {
+    const res = await fetch(`${API_BASE_URL}/reports/government-overview`)
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`)
+    return res.json()
+  },
+
+  async getComplianceFindings() {
+    const res = await fetch(`${API_BASE_URL}/reports/compliance-findings`)
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`)
+    return res.json()
+  },
+
   // Admin / Audit Logs
   async getAuditLogs() {
     const res = await fetch(`${API_BASE_URL}/admin/audit-logs`)

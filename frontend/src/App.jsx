@@ -14,6 +14,7 @@ import { Sparkles, Bot } from 'lucide-react'
 
 // Role 1: Government Leader Components
 import { GovDashboardView } from '@/components/roles/GovernmentLeader/GovDashboardView'
+import { GovBankAccountsView } from '@/components/roles/GovernmentLeader/GovBankAccountsView'
 import { GovSettingsView } from '@/components/roles/GovernmentLeader/GovSettingsView'
 import { LeadershipDashboardView } from '@/components/roles/GovernmentLeader/LeadershipDashboardView'
 import { UniversityOverviewView } from '@/components/roles/GovernmentLeader/UniversityOverviewView'
@@ -175,11 +176,9 @@ export default function App() {
           )
         case 'bank_accounts':
           return (
-            <UnivBankAccountView
+            <GovBankAccountsView
               onSelectTab={setActiveTab}
               onTriggerToast={triggerToast}
-              canEditReupload={false}
-              isGovLeader={true}
             />
           )
         case 'reports':

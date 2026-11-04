@@ -1,19 +1,24 @@
 import React, { useState, useMemo } from 'react'
 import {
   Settings,
-  Building2,
+  Users,
   Plus,
   Search,
   Filter,
-  Edit,
   Trash2,
   Mail,
-  Key,
-  Copy,
+  ShieldCheck,
+  CheckCircle2,
   Check,
-  AlertCircle,
-  MapPin,
-  RefreshCw,
+  Building2,
+  Server,
+  Layers,
+  Database,
+  Cpu,
+  MoreVertical,
+  Edit,
+  Clock,
+  Key,
 } from 'lucide-react'
 import { useFinancialData } from '@/context/FinancialDataContext'
 import { useAuth } from '@/context/AuthContext'
@@ -21,647 +26,444 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { formatCurrency } from '@/lib/utils'
-import { AddCollegeModal } from '@/components/shared/AddCollegeModal'
-
-const KARNATAKA_DISTRICTS = [
-  'Bagalkot',
-  'Ballari',
-  'Belagavi',
-  'Bengaluru Rural',
-  'Bengaluru Urban',
-  'Bidar',
-  'Chamarajanagar',
-  'Chikkaballapur',
-  'Chikkamagaluru',
-  'Chitradurga',
-  'Dakshina Kannada',
-  'Davanagere',
-  'Dharwad',
-  'Gadag',
-  'Hassan',
-  'Haveri',
-  'Kalaburagi',
-  'Kodagu',
-  'Kolar',
-  'Koppal',
-  'Mandya',
-  'Mysuru',
-  'Raichur',
-  'Ramanagara',
-  'Shivamogga',
-  'Tumakuru',
-  'Udupi',
-  'Uttara Kannada',
-  'Vijayanagara',
-  'Yadgir',
-]
-
-const INSTITUTION_TYPES = [
-  'State Public University',
-  'Deemed University',
-  'Autonomous College',
-  'Affiliated College',
-  'Institute of National Importance',
-  'Private State University',
-]
 
 export function GovSettingsView({ onSelectTab, onTriggerToast }) {
   const {
+    users = [],
     universities = [],
-    updateUniversity,
-    deleteUniversity,
+    auditLogs = [],
     refreshBackendData,
   } = useFinancialData()
 
-  const { refreshAuthData } = useAuth()
+  // 4 Sub-Tabs matching Panel 7
+  const [activeTab, setActiveTab] = useState('users') // 'users' | 'categories' | 'policies' | 'system'
 
-  // Filter & Search State
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedType, setSelectedType] = useState('ALL')
-  const [selectedStatus, setSelectedStatus] = useState('ALL')
+  // User Management State
+  const [userList, setUserList] = useState([
+    {
+      id: 'usr-1',
+      name: 'Admin User',
+      role: 'Super Admin',
+      email: 'admin@gov.in',
+      status: 'Active',
+    },
+    {
+      id: 'usr-2',
+      name: 'Finance Officer',
+      role: 'Government Admin',
+      email: 'finance@gov.in',
+      status: 'Active',
+    },
+    {
+      id: 'usr-3',
+      name: 'Analyst',
+      role: 'Viewer',
+      email: 'analyst@gov.in',
+      status: 'Active',
+    },
+    {
+      id: 'usr-4',
+      name: 'Auditor General',
+      role: 'Statutory Auditor',
+      email: 'auditor.general@gov.in',
+      status: 'Active',
+    },
+    {
+      id: 'usr-5',
+      name: 'Technical Officer',
+      role: 'System Administrator',
+      email: 'sysadmin@gov.in',
+      status: 'Active',
+    },
+  ])
 
-  // Copied State
-  const [copiedKey, setCopiedKey] = useState('')
-
-  // Add College Modal State (uses shared AddCollegeModal)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-
-  // Edit College Modal State
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false)
-  const [editingCollege, setEditingCollege] = useState(null)
-
-  // Delete College Modal State
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [isSubmittingDelete, setIsSubmittingDelete] = useState(false)
-  const [deletingCollege, setDeletingCollege] = useState(null)
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-  const handleCopy = (text, key) => {
-    navigator.clipboard.writeText(text)
-    setCopiedKey(key)
-    setTimeout(() => setCopiedKey(''), 2500)
-    if (onTriggerToast) {
-      onTriggerToast('Copied', text, 'success')
-    }
-  }
-
-  // Filtered universities
-  const filteredUniversities = useMemo(() => {
-    return universities.filter((u) => {
-      const q = searchQuery.toLowerCase().trim()
-      const matchesSearch =
-        !q ||
-        (u.name && u.name.toLowerCase().includes(q)) ||
-        (u.code && u.code.toLowerCase().includes(q)) ||
-        (u.officialEmail && u.officialEmail.toLowerCase().includes(q)) ||
-        (u.financeEmail && u.financeEmail.toLowerCase().includes(q)) ||
-        (u.district && u.district.toLowerCase().includes(q)) ||
-        (u.institutionType && u.institutionType.toLowerCase().includes(q))
-
-      const matchesType = selectedType === 'ALL' || u.institutionType === selectedType
-      const matchesStatus = selectedStatus === 'ALL' || u.status === selectedStatus
-
-      return matchesSearch && matchesType && matchesStatus
-    })
-  }, [universities, searchQuery, selectedType, selectedStatus])
-
-  // Total allocation
-  const totalAllocated = useMemo(() => {
-    return universities.reduce((acc, u) => acc + (Number(u.allocatedAmount) || 0), 0)
-  }, [universities])
-
-  // Handle Edit Open
-  const handleOpenEdit = (college) => {
-    const rawAlloc = college.allocatedAmount ?? college.allocation ?? 0
-    setEditingCollege({
-      ...college,
-      allocatedAmount: rawAlloc ? String(rawAlloc) : '0',
-    })
-    setIsEditModalOpen(true)
-  }
-
-  // Handle Edit Submit
-  const handleEditSubmit = async (e) => {
-    e.preventDefault()
-    if (!editingCollege) return
-
-    if (!editingCollege.name.trim()) {
-      if (onTriggerToast) onTriggerToast('Missing Name', 'Official college legal name is required.', 'danger')
-      return
-    }
-    if (!editingCollege.officialEmail.trim() || !emailRegex.test(editingCollege.officialEmail.trim())) {
-      if (onTriggerToast) onTriggerToast('Invalid Email', 'A valid official institutional email is required.', 'danger')
-      return
-    }
-    if (!editingCollege.financeEmail.trim() || !emailRegex.test(editingCollege.financeEmail.trim())) {
-      if (onTriggerToast) onTriggerToast('Invalid Email', 'A valid authorized finance email is required.', 'danger')
-      return
-    }
-
-    const allocVal = Number(editingCollege.allocatedAmount) || 0
-
-    setIsSubmittingEdit(true)
-    try {
-      await updateUniversity(editingCollege.id, {
-        name: editingCollege.name.trim(),
-        code: editingCollege.code.trim().toUpperCase(),
-        institutionType: editingCollege.institutionType,
-        officialEmail: editingCollege.officialEmail.trim().toLowerCase(),
-        financeEmail: editingCollege.financeEmail.trim().toLowerCase(),
-        state: editingCollege.state || 'Karnataka',
-        district: editingCollege.district,
-        address: editingCollege.address,
-        affiliatedUniversity: editingCollege.affiliatedUniversity,
-        allocation: allocVal,
-        allocatedAmount: allocVal,
-        status: editingCollege.status || 'Optimal',
+  // Combine with backend users if available
+  const combinedUsers = useMemo(() => {
+    if (!users || users.length === 0) return userList
+    const map = new Map()
+    userList.forEach((u) => map.set(u.email, u))
+    users.forEach((u, idx) => {
+      map.set(u.email || `usr-db-${idx}`, {
+        id: u.id || `usr-db-${idx}`,
+        name: u.name || u.email?.split('@')[0] || 'System User',
+        role: u.role || 'Government Admin',
+        email: u.email || 'user@gov.in',
+        status: u.status || 'Active',
       })
+    })
+    return Array.from(map.values())
+  }, [userList, users])
 
-      if (refreshAuthData) await refreshAuthData()
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false)
+  const [newUserData, setNewUserData] = useState({
+    name: '',
+    email: '',
+    role: 'Government Admin',
+  })
 
-      setIsSubmittingEdit(false)
-      setIsEditModalOpen(false)
-      setEditingCollege(null)
+  // Categories State
+  const [categories, setCategories] = useState([
+    { id: 'cat-1', name: 'Salaries & Wages', code: 'SAL', cap: '₹ 2,500 Cr', mapping: 'Direct Payroll / Vouchers' },
+    { id: 'cat-2', name: 'Infrastructure', code: 'INF', cap: '₹ 800 Cr', mapping: 'Capital Works / PWD' },
+    { id: 'cat-3', name: 'Utilities', code: 'UTL', cap: '₹ 400 Cr', mapping: 'Electricity, Water, Campus' },
+    { id: 'cat-4', name: 'Academic Resources', code: 'ACD', cap: '₹ 350 Cr', mapping: 'Library, Lab Supplies' },
+    { id: 'cat-5', name: 'Administrative', code: 'ADM', cap: '₹ 500 Cr', mapping: 'Operations, Legal, Postage' },
+    { id: 'cat-6', name: 'R&D & Others', code: 'RND', cap: '₹ 600 Cr', mapping: 'Research Grants, Innovations' },
+  ])
 
-      if (onTriggerToast) {
-        onTriggerToast('College Updated', `Records for ${editingCollege.name} updated!`, 'success')
-      }
-    } catch (err) {
-      setIsSubmittingEdit(false)
-      if (onTriggerToast) {
-        onTriggerToast('Update Failed', err.message || 'Could not update college data.', 'danger')
-      }
+  // Policy Rules State
+  const [policies, setPolicies] = useState([
+    {
+      id: 'pol-1',
+      title: 'KGFR Rule 149 - Single Purchase Ceiling',
+      limit: '₹ 5,00,000',
+      description: 'Competitive public tendering mandatory for procurements > ₹ 5 Lakh.',
+      status: 'Enforced',
+    },
+    {
+      id: 'pol-2',
+      title: 'K.S.U. Act 2000 § 102 - Statutory Voucher Validation',
+      limit: '100% Statements',
+      description: 'Quarterly filing within 30 days of quarter close.',
+      status: 'Enforced',
+    },
+    {
+      id: 'pol-3',
+      title: 'Dual Control High-Value Threshold',
+      limit: '₹ 20,00,000',
+      description: 'Secondary sign-off required for outflows exceeding ₹ 20 Lakh.',
+      status: 'Enforced',
+    },
+  ])
+
+  // Handlers
+  const handleAddUser = (e) => {
+    e.preventDefault()
+    if (!newUserData.name || !newUserData.email) return
+    const user = {
+      id: `usr-${Date.now()}`,
+      name: newUserData.name,
+      email: newUserData.email,
+      role: newUserData.role,
+      status: 'Active',
+    }
+    setUserList([user, ...userList])
+    setIsAddUserModalOpen(false)
+    setNewUserData({ name: '', email: '', role: 'Government Admin' })
+    if (onTriggerToast) {
+      onTriggerToast('User Created', `Added ${user.name} (${user.role}).`, 'success')
     }
   }
 
-  // Handle Delete Open
-  const handleOpenDelete = (college) => {
-    setDeletingCollege(college)
-    setIsDeleteModalOpen(true)
-  }
-
-  // Handle Delete Submit
-  const handleDeleteSubmit = async () => {
-    if (!deletingCollege) return
-    setIsSubmittingDelete(true)
-    try {
-      await deleteUniversity(deletingCollege.id)
-      if (refreshAuthData) await refreshAuthData()
-
-      setIsSubmittingDelete(false)
-      setIsDeleteModalOpen(false)
-      const collegeName = deletingCollege.name
-      setDeletingCollege(null)
-
-      if (onTriggerToast) {
-        onTriggerToast('College Deleted', `${collegeName} removed from registry.`, 'success')
-      }
-    } catch (err) {
-      setIsSubmittingDelete(false)
-      if (onTriggerToast) {
-        onTriggerToast('Delete Failed', err.message || 'Could not delete college.', 'danger')
-      }
+  const handleDeleteUser = (id) => {
+    setUserList(userList.filter((u) => u.id !== id))
+    if (onTriggerToast) {
+      onTriggerToast('User Removed', 'User deactivated from registry.', 'success')
     }
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header Banner (Clean, Zero Description Clutter) */}
-      <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <h1 className="text-xl font-bold tracking-tight text-[#1f2328] flex items-center gap-2">
-            <Settings className="h-5 w-5 text-[#0969da]" />
-            College Registry & Administration Settings
+    <div className="space-y-5 pb-12">
+      {/* 1. Header Bar (Matching Panel 7 Mockup) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[#1f2328]">
+            Settings
           </h1>
-
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refreshBackendData}
-              className="flex items-center gap-1.5 text-xs text-[#24292f]"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-[#57606a]" />
-              Refresh
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs shadow-xs"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add New College
-            </Button>
-          </div>
-        </div>
-
-        {/* Dynamic Registry Stats Ribbon (Numbers Only) */}
-        <div className="mt-4 pt-4 border-t border-[#d0d7de]/60 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50">
-            <div className="text-[11px] font-medium text-[#57606a] uppercase tracking-wider">
-              Total Listed Colleges
-            </div>
-            <div className="text-xl font-bold text-[#1f2328] mt-1 font-mono">
-              {universities.length}
-            </div>
-          </div>
-
-          <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50">
-            <div className="text-[11px] font-medium text-[#57606a] uppercase tracking-wider">
-              Total State Budget
-            </div>
-            <div className="text-xl font-bold text-[#1f2328] mt-1 font-mono">
-              {formatCurrency(totalAllocated)}
-            </div>
-          </div>
-
-          <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50">
-            <div className="text-[11px] font-medium text-[#57606a] uppercase tracking-wider">
-              Dual Auth Accounts
-            </div>
-            <div className="text-xl font-bold text-[#1f2328] mt-1 font-mono">
-              {universities.length * 2}
-            </div>
-          </div>
-
-          <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de]/50">
-            <div className="text-[11px] font-medium text-[#57606a] uppercase tracking-wider">
-              Optimal Campuses
-            </div>
-            <div className="text-xl font-bold text-emerald-600 mt-1 font-mono">
-              {universities.filter((u) => u.status === 'Optimal').length}
-            </div>
-          </div>
+          <p className="text-xs text-[#57606a] mt-0.5">
+            Manage users, roles, categories and system preferences
+          </p>
         </div>
       </div>
 
-      {/* Main Listed Colleges Data Table */}
-      <div className="rounded-xl border border-[#d0d7de] bg-white p-5 shadow-xs space-y-4">
-        {/* Search & Filter Toolbar */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#57606a]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by college name, code, email, or district..."
-              className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] pl-9 pr-3 text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-            />
-          </div>
+      {/* 2. Sub-Tabs Bar: User Management | Categories | Policy Rules | System */}
+      <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-[#d0d7de] shadow-xs">
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+            activeTab === 'users'
+              ? 'bg-[#0969da] text-white shadow-2xs'
+              : 'text-[#57606a] hover:text-[#1f2328]'
+          }`}
+        >
+          User Management
+        </button>
+        <button
+          onClick={() => setActiveTab('categories')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+            activeTab === 'categories'
+              ? 'bg-[#0969da] text-white shadow-2xs'
+              : 'text-[#57606a] hover:text-[#1f2328]'
+          }`}
+        >
+          Categories
+        </button>
+        <button
+          onClick={() => setActiveTab('policies')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+            activeTab === 'policies'
+              ? 'bg-[#0969da] text-white shadow-2xs'
+              : 'text-[#57606a] hover:text-[#1f2328]'
+          }`}
+        >
+          Policy Rules
+        </button>
+        <button
+          onClick={() => setActiveTab('system')}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+            activeTab === 'system'
+              ? 'bg-[#0969da] text-white shadow-2xs'
+              : 'text-[#57606a] hover:text-[#1f2328]'
+          }`}
+        >
+          System
+        </button>
+      </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-            >
-              <option value="ALL">All Types</option>
-              {INSTITUTION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="Optimal">Optimal</option>
-              <option value="Watch">Watch</option>
-              <option value="Critical">Critical</option>
-            </select>
-
+      {/* 3. Sub-Tab 1: User Management (Matching Panel 7 Mockup Exactly) */}
+      {activeTab === 'users' && (
+        <div className="rounded-xl border border-[#d0d7de] bg-white shadow-xs p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#d0d7de]/70 pb-3">
+            <h2 className="text-sm font-bold text-[#1f2328]">
+              Users ({combinedUsers.length})
+            </h2>
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setIsAddModalOpen(true)}
-              className="text-xs"
+              onClick={() => setIsAddUserModalOpen(true)}
+              className="h-8.5 text-xs flex items-center gap-1.5 bg-[#0969da] text-white hover:bg-[#085ec4] cursor-pointer"
             >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Add College
+              <Plus className="h-3.5 w-3.5" />
+              Add User
             </Button>
           </div>
-        </div>
 
-        {/* Table View */}
-        {filteredUniversities.length === 0 ? (
-          <div className="text-center py-8 border border-dashed border-[#d0d7de] rounded-lg">
-            <Building2 className="h-8 w-8 text-[#57606a] mx-auto mb-2 opacity-40" />
-            <div className="text-xs font-semibold text-[#1f2328]">No Colleges Found</div>
-            {universities.length === 0 && (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setIsAddModalOpen(true)}
-                className="mt-2 text-xs"
-              >
-                + Add College
-              </Button>
-            )}
-          </div>
-        ) : (
           <div className="overflow-x-auto rounded-lg border border-[#d0d7de]">
             <table className="w-full text-left text-xs">
               <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
                 <tr>
-                  <th className="py-2.5 px-3">College Legal Name & Code</th>
-                  <th className="py-2.5 px-3">Type</th>
-                  <th className="py-2.5 px-3">Official Email</th>
-                  <th className="py-2.5 px-3">Authorized Finance Email</th>
-                  <th className="py-2.5 px-3">Location</th>
-                  <th className="py-2.5 px-3">State Budget</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Actions</th>
+                  <th className="py-3 px-3.5 w-12 text-center">#</th>
+                  <th className="py-3 px-3.5">Name</th>
+                  <th className="py-3 px-3.5">Role</th>
+                  <th className="py-3 px-3.5">Email</th>
+                  <th className="py-3 px-3.5 text-center">Status</th>
+                  <th className="py-3 px-3.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#d0d7de]">
-                {filteredUniversities.map((college) => {
-                  const alloc = Number(college.allocation ?? college.allocatedAmount) || 0
-                  const isCopiedOfficial = copiedKey === `off-${college.id}`
-                  const isCopiedFinance = copiedKey === `fin-${college.id}`
-
-                  return (
-                    <tr key={college.id} className="hover:bg-[#f6f8fa]/80 transition-colors">
-                      <td className="py-2.5 px-3">
-                        <div className="font-semibold text-xs text-[#1f2328]">{college.name}</div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="font-mono text-[10px] text-[#57606a] bg-[#eaeef2] px-1.5 py-0.2 rounded">
-                            {college.code}
-                          </span>
-                          {college.affiliatedUniversity && (
-                            <span className="text-[10px] text-[#656d76]">
-                              • Affil: {college.affiliatedUniversity}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-2.5 px-3">
-                        <Badge variant="outline" className="text-[10px]">
-                          {college.institutionType || 'State Public'}
-                        </Badge>
-                      </td>
-
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[11px] text-[#1f2328]">
-                            {college.officialEmail || 'N/A'}
-                          </span>
-                          {college.officialEmail && (
-                            <button
-                              onClick={() => handleCopy(college.officialEmail, `off-${college.id}`)}
-                              className="text-[#57606a] hover:text-[#0969da] cursor-pointer"
-                              title="Copy official email"
-                            >
-                              {isCopiedOfficial ? (
-                                <Check className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <Copy className="h-3 w-3" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono text-[11px] font-semibold text-[#0969da]">
-                            {college.financeEmail || 'N/A'}
-                          </span>
-                          {college.financeEmail && (
-                            <button
-                              onClick={() => handleCopy(college.financeEmail, `fin-${college.id}`)}
-                              className="text-[#57606a] hover:text-[#0969da] cursor-pointer"
-                              title="Copy finance email"
-                            >
-                              {isCopiedFinance ? (
-                                <Check className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <Copy className="h-3 w-3" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="py-2.5 px-3 text-[#57606a]">
-                        <div className="flex items-center gap-1 text-xs text-[#1f2328]">
-                          <MapPin className="h-3 w-3 text-[#57606a]" />
-                          <span>{college.district || 'Karnataka'}</span>
-                        </div>
-                      </td>
-
-                      <td className="py-2.5 px-3 font-mono font-semibold text-[#1f2328]">
-                        {formatCurrency(alloc)}
-                      </td>
-
-                      <td className="py-2.5 px-3">
-                        <Badge
-                          variant={
-                            college.status === 'Optimal'
-                              ? 'success'
-                              : college.status === 'Watch'
-                              ? 'warning'
-                              : 'danger'
-                          }
-                          className="text-[10px]"
-                        >
-                          {college.status || 'Optimal'}
-                        </Badge>
-                      </td>
-
-                      <td className="py-2.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => handleOpenEdit(college)}
-                            className="p-1.5 text-[#57606a] hover:text-[#0969da] hover:bg-[#f6f8fa] rounded cursor-pointer transition-colors"
-                            title="Update college data"
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenDelete(college)}
-                            className="p-1.5 text-[#57606a] hover:text-red-600 hover:bg-red-50 rounded cursor-pointer transition-colors"
-                            title="Delete college"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {combinedUsers.map((u, idx) => (
+                  <tr key={u.id || idx} className="hover:bg-[#f6f8fa]/80 transition-colors">
+                    <td className="py-3 px-3.5 text-center font-mono text-[#57606a] font-medium">
+                      {idx + 1}
+                    </td>
+                    <td className="py-3 px-3.5 font-bold text-[#1f2328]">
+                      {u.name}
+                    </td>
+                    <td className="py-3 px-3.5 text-[#57606a] font-medium">
+                      {u.role}
+                    </td>
+                    <td className="py-3 px-3.5 font-mono text-[#0969da]">
+                      {u.email}
+                    </td>
+                    <td className="py-3 px-3.5 text-center">
+                      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {u.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-3.5 text-right">
+                      <button
+                        onClick={() => handleDeleteUser(u.id)}
+                        className="p-1.5 text-[#57606a] hover:text-[#cf222e] hover:bg-[#ffebe9] rounded-md transition-colors cursor-pointer"
+                        title="Delete User"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Shared Add College Modal (100% Identical to All College Modal) */}
-      <AddCollegeModal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onTriggerToast={onTriggerToast}
-      />
+      {/* 4. Sub-Tab 2: Categories */}
+      {activeTab === 'categories' && (
+        <div className="rounded-xl border border-[#d0d7de] bg-white shadow-xs p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#d0d7de]/70 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-[#1f2328]">
+                Expenditure Categories ({categories.length})
+              </h2>
+              <p className="text-xs text-[#57606a] mt-0.5">
+                Statutory general ledger account codes and sanctioned ceiling caps
+              </p>
+            </div>
+          </div>
 
-      {/* UPDATE COLLEGE MODAL */}
-      {editingCollege && (
+          <div className="overflow-x-auto rounded-lg border border-[#d0d7de]">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
+                <tr>
+                  <th className="py-3 px-3.5">Category Name</th>
+                  <th className="py-3 px-3.5">Code</th>
+                  <th className="py-3 px-3.5">Budget Ceiling</th>
+                  <th className="py-3 px-3.5">Mapping Specification</th>
+                  <th className="py-3 px-3.5 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#d0d7de]">
+                {categories.map((c) => (
+                  <tr key={c.id} className="hover:bg-[#f6f8fa]/80 transition-colors">
+                    <td className="py-3 px-3.5 font-bold text-[#1f2328]">{c.name}</td>
+                    <td className="py-3 px-3.5 font-mono text-[#57606a]">{c.code}</td>
+                    <td className="py-3 px-3.5 font-mono font-semibold text-[#1f2328]">{c.cap}</td>
+                    <td className="py-3 px-3.5 text-[#57606a]">{c.mapping}</td>
+                    <td className="py-3 px-3.5 text-center">
+                      <Badge variant="success" className="text-[10px]">Active</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Sub-Tab 3: Policy Rules */}
+      {activeTab === 'policies' && (
+        <div className="rounded-xl border border-[#d0d7de] bg-white shadow-xs p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-bold text-[#1f2328]">
+              Statutory Policy Engine Rules
+            </h2>
+            <p className="text-xs text-[#57606a] mt-0.5">
+              Automated compliance threshold checks executed against university transactions
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {policies.map((p) => (
+              <div key={p.id} className="p-4 rounded-xl border border-[#d0d7de] bg-[#f6f8fa] flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-[#1f2328]">{p.title}</span>
+                    <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
+                      {p.status}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-[#57606a]">{p.description}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] text-[#57606a] block">Threshold</span>
+                  <span className="font-mono font-bold text-xs text-[#0969da]">{p.limit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 6. Sub-Tab 4: System Configuration */}
+      {activeTab === 'system' && (
+        <div className="rounded-xl border border-[#d0d7de] bg-white shadow-xs p-5 space-y-4 text-xs">
+          <div>
+            <h2 className="text-sm font-bold text-[#1f2328]">
+              System & Architecture Configuration
+            </h2>
+            <p className="text-xs text-[#57606a] mt-0.5">
+              Service status, vector database, and inference endpoints
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl border border-[#d0d7de] bg-[#f6f8fa] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#1f2328] flex items-center gap-2">
+                  <Cpu className="h-4 w-4 text-[#8b5cf6]" />
+                  Ollama Local Inference
+                </span>
+                <Badge variant="success" className="text-[10px]">Online</Badge>
+              </div>
+              <div className="font-mono text-[#57606a]">Endpoint: http://localhost:11434</div>
+              <div className="text-[#57606a]">Model: mistral / llama3.2 (Autonomous Statement Analysis)</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-[#d0d7de] bg-[#f6f8fa] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[#1f2328] flex items-center gap-2">
+                  <Database className="h-4 w-4 text-[#0969da]" />
+                  ChromaDB Vector Store
+                </span>
+                <Badge variant="success" className="text-[10px]">Connected</Badge>
+              </div>
+              <div className="font-mono text-[#57606a]">Collection: university_financial_rag</div>
+              <div className="text-[#57606a]">Embeddings: nomic-embed-text / all-minilm</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add User Modal */}
+      {isAddUserModalOpen && (
         <Modal
-          isOpen={isEditModalOpen}
-          onClose={() => !isSubmittingEdit && setIsEditModalOpen(false)}
-          title={`Update College: ${editingCollege.name}`}
-          maxWidth="max-w-2xl"
+          isOpen={isAddUserModalOpen}
+          onClose={() => setIsAddUserModalOpen(false)}
+          title="Add Government Admin User"
+          className="max-w-md"
         >
-          <form onSubmit={handleEditSubmit} className="space-y-3.5 pt-1 text-xs">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block font-semibold text-[#1f2328] mb-1">
-                  Official Legal Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editingCollege.name}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, name: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">
-                  College Code <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editingCollege.code}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, code: e.target.value.toUpperCase() })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 font-mono text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">Institution Type</label>
-                <select
-                  value={editingCollege.institutionType || 'State Public University'}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, institutionType: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-                >
-                  {INSTITUTION_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">Affiliated University</label>
-                <input
-                  type="text"
-                  value={editingCollege.affiliatedUniversity || ''}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, affiliatedUniversity: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">
-                  Official Institutional Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={editingCollege.officialEmail || ''}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, officialEmail: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 font-mono text-xs text-[#1f2328] focus:bg-white focus:border-[#0969da] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">
-                  Authorized Finance Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={editingCollege.financeEmail || ''}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, financeEmail: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#0969da]/50 bg-white px-3 font-mono text-xs text-[#1f2328] focus:border-[#0969da] focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">District</label>
-                <select
-                  value={editingCollege.district || 'Bengaluru Urban'}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, district: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-                >
-                  {KARNATAKA_DISTRICTS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-[#1f2328] mb-1">Status</label>
-                <select
-                  value={editingCollege.status || 'Optimal'}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, status: e.target.value })}
-                  className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-                >
-                  <option value="Optimal">Optimal</option>
-                  <option value="Watch">Watch</option>
-                  <option value="Critical">Critical</option>
-                </select>
-              </div>
-            </div>
-
+          <form onSubmit={handleAddUser} className="space-y-3.5 pt-2 text-xs">
             <div>
-              <label className="block font-semibold text-[#1f2328] mb-1">Campus Address</label>
-              <input
-                type="text"
-                value={editingCollege.address || ''}
-                onChange={(e) => setEditingCollege({ ...editingCollege, address: e.target.value })}
-                className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 text-xs text-[#1f2328] focus:bg-white focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block font-semibold text-[#1f2328] mb-1">
-                Allocated State Budget (₹)
+              <label className="block text-xs font-semibold text-[#1f2328] mb-1">
+                Full Name *
               </label>
               <input
-                type="number"
-                value={editingCollege.allocatedAmount || '0'}
-                onChange={(e) => setEditingCollege({ ...editingCollege, allocatedAmount: e.target.value })}
-                className="w-full h-8.5 rounded-md border border-[#d0d7de] bg-[#f6f8fa] px-3 font-mono text-xs text-[#1f2328] focus:bg-white focus:outline-none"
+                type="text"
+                value={newUserData.name}
+                onChange={(e) => setNewUserData({ ...newUserData, name: e.target.value })}
+                required
+                placeholder="e.g. Finance Officer"
+                className="w-full h-8.5 rounded-lg border border-[#d0d7de] px-2.5 text-xs text-[#1f2328]"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#d0d7de]">
+            <div>
+              <label className="block text-xs font-semibold text-[#1f2328] mb-1">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                value={newUserData.email}
+                onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
+                required
+                placeholder="e.g. officer@gov.in"
+                className="w-full h-8.5 rounded-lg border border-[#d0d7de] px-2.5 text-xs text-[#1f2328]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#1f2328] mb-1">
+                Role *
+              </label>
+              <select
+                value={newUserData.role}
+                onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
+                className="w-full h-8.5 rounded-lg border border-[#d0d7de] bg-white px-2.5 text-xs text-[#1f2328]"
+              >
+                <option value="Super Admin">Super Admin</option>
+                <option value="Government Admin">Government Admin</option>
+                <option value="Viewer">Viewer</option>
+                <option value="Finance Officer">Finance Officer</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-[#d0d7de]">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setIsEditModalOpen(false)}
-                disabled={isSubmittingEdit}
+                onClick={() => setIsAddUserModalOpen(false)}
+                className="text-xs"
               >
                 Cancel
               </Button>
@@ -669,57 +471,12 @@ export function GovSettingsView({ onSelectTab, onTriggerToast }) {
                 type="submit"
                 variant="primary"
                 size="sm"
-                disabled={isSubmittingEdit}
+                className="text-xs bg-[#0969da] text-white hover:bg-[#085ec4]"
               >
-                {isSubmittingEdit ? 'Saving...' : 'Save Updates'}
+                Save User
               </Button>
             </div>
           </form>
-        </Modal>
-      )}
-
-      {/* DELETE COLLEGE CONFIRMATION */}
-      {deletingCollege && (
-        <Modal
-          isOpen={isDeleteModalOpen}
-          onClose={() => !isSubmittingDelete && setIsDeleteModalOpen(false)}
-          title="Delete College"
-          maxWidth="max-w-md"
-        >
-          <div className="space-y-4 pt-1 text-xs">
-            <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-red-800 space-y-1">
-              <div className="font-semibold flex items-center gap-1.5">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                Are you sure?
-              </div>
-              <p className="text-[11px] leading-relaxed text-red-700">
-                You are about to delete <strong>{deletingCollege.name}</strong> ({deletingCollege.code}).
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#d0d7de]">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsDeleteModalOpen(false)}
-                disabled={isSubmittingDelete}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                onClick={handleDeleteSubmit}
-                disabled={isSubmittingDelete}
-                className="flex items-center gap-1.5"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                {isSubmittingDelete ? 'Deleting...' : 'Confirm Delete'}
-              </Button>
-            </div>
-          </div>
         </Modal>
       )}
     </div>
