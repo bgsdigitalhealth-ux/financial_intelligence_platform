@@ -68,11 +68,29 @@ def classify_transaction(desc, tx_type):
     return category, is_exception
 
 def parse_pdf(filepath):
-    import pypdf
-    
-    with open(filepath, 'rb') as f:
-        reader = pypdf.PdfReader(f)
-        full_text = '\n'.join([p.extract_text() or '' for p in reader.pages])
+    full_text = ''
+    try:
+        import pypdf
+        with open(filepath, 'rb') as f:
+            reader = pypdf.PdfReader(f)
+            full_text = '\n'.join([p.extract_text() or '' for p in reader.pages])
+    except Exception:
+        try:
+            import zlib
+            with open(filepath, 'rb') as f:
+                raw_bytes = f.read()
+            chunks = []
+            for m in re.finditer(b'stream\r?\n(.*?)\r?\nendstream', raw_bytes, re.DOTALL):
+                try:
+                    decomp = zlib.decompress(m.group(1))
+                    chunks.append(decomp.decode('latin1', errors='ignore'))
+                except Exception:
+                    chunks.append(m.group(1).decode('latin1', errors='ignore'))
+            full_text = '\n'.join(chunks)
+            if not full_text:
+                full_text = raw_bytes.decode('latin1', errors='ignore')
+        except Exception:
+            full_text = ''
 
     lines = [l.strip() for l in full_text.split('\n') if l.strip()]
 
