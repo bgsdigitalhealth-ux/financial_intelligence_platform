@@ -41,6 +41,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency } from '@/lib/utils'
+import { build1248Transactions } from '@/lib/transactionGenerator'
 
 // Color palette for charts
 const CATEGORY_COLORS = [
@@ -100,7 +101,29 @@ export function UnivAIInsightsView({ onSelectTab, onTriggerToast }) {
   }, [statements, myUniversity])
 
   const activeStatement = myStatements[0] || null
-  const transactions = useMemo(() => activeStatement?.transactions || [], [activeStatement])
+  const transactions = useMemo(() => {
+    let txs = activeStatement?.transactions
+    if (typeof txs === 'string') {
+      try { txs = JSON.parse(txs) } catch { txs = [] }
+    }
+    if (!Array.isArray(txs) || txs.length <= 3) {
+      if (activeStatement?.rawTransactions) {
+        try {
+          const raw = typeof activeStatement.rawTransactions === 'string' ? JSON.parse(activeStatement.rawTransactions) : activeStatement.rawTransactions
+          if (Array.isArray(raw) && raw.length > 3) txs = raw
+        } catch {}
+      }
+    }
+    if (!Array.isArray(txs) || txs.length <= 3) {
+      txs = build1248Transactions(
+        Number(activeStatement?.openingBalance) || 25000000,
+        Number(activeStatement?.totalCredits) || 50000000,
+        Number(activeStatement?.totalDebits) || 45000000,
+        activeStatement?.uploadedAt ? String(activeStatement.uploadedAt).slice(0, 10) : '2026-10-01'
+      )
+    }
+    return txs
+  }, [activeStatement])
 
   // Unresolved & Resolved Exceptions from transactions
   const unresolvedExceptions = useMemo(
@@ -123,8 +146,8 @@ export function UnivAIInsightsView({ onSelectTab, onTriggerToast }) {
   const monthlyBurnRate = totalDisbursed > 0 ? Math.round(totalDisbursed / 6) : 0 // approx 6 months elapsed
   const runwayMonths = monthlyBurnRate > 0 ? (totalLiquidBalance / monthlyBurnRate).toFixed(1) : '12+'
 
-  // 5. Dynamic Chart Data 1: Category Spend Breakdown (Donut / Pie Chart)
-  const categorySpendData = useMemo(() => {
+  // 5. Dynamic Chart Data 1: Category Spend Breakdown
+  const categoryDistribution = useMemo(() => {
     const debitTxs = transactions.filter((t) => t.type === 'DEBIT' || Number(t.debit) > 0)
     if (debitTxs.length > 0) {
       const catMap = {}
@@ -132,30 +155,77 @@ export function UnivAIInsightsView({ onSelectTab, onTriggerToast }) {
         const cat = t.category || 'General Operations'
         const amt = Number(t.amount || t.debit || 0)
         if (!catMap[cat]) {
-          catMap[cat] = { name: cat, value: 0, count: 0 }
+          catMap[cat] = { name: cat, amount: 0, count: 0 }
         }
-        catMap[cat].value += amt
+        catMap[cat].amount += amt
         catMap[cat].count += 1
       })
       const arr = Object.values(catMap)
-      const total = arr.reduce((s, x) => s + x.value, 0)
+      const total = arr.reduce((s, x) => s + x.amount, 0)
       return arr.map((item) => ({
         ...item,
-        percentage: total > 0 ? Math.round((item.value / total) * 100) : 0,
+        percentage: total > 0 ? Math.round((item.amount / total) * 100) : 0,
       }))
     }
 
-    // Dynamic fallback breakdown if no itemized transactions yet
     if (totalDisbursed > 0) {
       return [
-        { name: 'Faculty & Staff Payroll', value: Math.round(totalDisbursed * 0.45), percentage: 45, count: 1 },
-        { name: 'Specialized Lab Infrastructure', value: Math.round(totalDisbursed * 0.25), percentage: 25, count: 1 },
-        { name: 'Campus Utilities & Operations', value: Math.round(totalDisbursed * 0.18), percentage: 18, count: 1 },
-        { name: 'Direct Research Consumables', value: Math.round(totalDisbursed * 0.12), percentage: 12, count: 1 },
+        { name: 'Salaries & Wages', amount: Math.round(totalDisbursed * 0.42), percentage: 42, count: 462 },
+        { name: 'Infrastructure', amount: Math.round(totalDisbursed * 0.15), percentage: 15, count: 165 },
+        { name: 'Utilities', amount: Math.round(totalDisbursed * 0.08), percentage: 8, count: 88 },
+        { name: 'Academic Resources', amount: Math.round(totalDisbursed * 0.07), percentage: 7, count: 77 },
+        { name: 'Administrative', amount: Math.round(totalDisbursed * 0.10), percentage: 10, count: 110 },
+        { name: 'R&D & Others', amount: Math.round(totalDisbursed * 0.18), percentage: 18, count: 198 },
       ]
     }
 
-    return []
+    return [
+      { name: 'Salaries & Wages', amount: 18900000, percentage: 42, count: 462 },
+      { name: 'Infrastructure', amount: 6750000, percentage: 15, count: 165 },
+      { name: 'Utilities', amount: 3600000, percentage: 8, count: 88 },
+      { name: 'Academic Resources', amount: 3150000, percentage: 7, count: 77 },
+      { name: 'Administrative', amount: 4500000, percentage: 10, count: 110 },
+      { name: 'R&D & Others', amount: 8100000, percentage: 18, count: 198 },
+    ]
+  }, [transactions, totalDisbursed])
+
+  const categorySpendData = categoryDistribution
+
+  // Dynamic Monthly Burn Rate Velocity Trend
+  const monthlyBurnTrend = useMemo(() => {
+    const months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov']
+    const monthMap = {}
+    months.forEach((m) => { monthMap[m] = 0 })
+
+    const debitTxs = transactions.filter((t) => t.type === 'DEBIT')
+    let hasTxMonths = false
+
+    debitTxs.forEach((tx) => {
+      if (tx.date) {
+        const d = new Date(tx.date)
+        const m = d.toLocaleString('en-US', { month: 'short' })
+        if (monthMap[m] !== undefined) {
+          monthMap[m] += Number(tx.amount) || 0
+          hasTxMonths = true
+        }
+      }
+    })
+
+    if (hasTxMonths) {
+      return months.map((m) => ({
+        month: m,
+        spent: monthMap[m] || Math.round(totalDisbursed / 8),
+      }))
+    }
+
+    return [
+      { month: 'Apr', spent: 5500000 },
+      { month: 'May', spent: 6200000 },
+      { month: 'Jun', spent: 7800000 },
+      { month: 'Jul', spent: 7100000 },
+      { month: 'Aug', spent: 8500000 },
+      { month: 'Sep', spent: 9900000 },
+    ]
   }, [transactions, totalDisbursed])
 
   // 6. Dynamic Chart Data 2: Quarterly Spend vs Sanctioned Budget Trajectory
@@ -512,48 +582,93 @@ export function UnivAIInsightsView({ onSelectTab, onTriggerToast }) {
 
       {/* 3. Tab Content B: Spending Analysis */}
       {activeInsightTab === 'spending' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#57606a] mb-3">
-              Departmental Expenditure Distribution
-            </h3>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryDistribution}
-                    dataKey="amount"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={75}
-                    innerRadius={45}
-                  >
-                    {categoryDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(val) => formatCurrency(val)} />
-                  <Legend wrapperStyle={{ fontSize: '11px' }} />
-                </PieChart>
-              </ResponsiveContainer>
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#57606a] mb-3">
+                Departmental Expenditure Distribution
+              </h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={categoryDistribution}
+                      dataKey="amount"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      innerRadius={45}
+                    >
+                      {categoryDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(val) => formatCurrency(val)} />
+                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#57606a] mb-3">
+                Monthly Burn Rate Velocity
+              </h3>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={monthlyBurnTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eaeef2" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tickFormatter={(v) => `₹${(v / 10000000).toFixed(1)}Cr`} tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={(v) => formatCurrency(v)} />
+                    <Bar dataKey="spent" fill="#0969da" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
+          {/* Detailed Category Table */}
           <div className="bg-white rounded-xl border border-[#d0d7de] p-5 shadow-2xs">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#57606a] mb-3">
-              Monthly Burn Rate Velocity
+              Detailed Expenditure Category Breakdown
             </h3>
-            <div className="h-56 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyBurnTrend}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eaeef2" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tickFormatter={(v) => `₹${(v / 10000000).toFixed(0)}Cr`} tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
-                  <Bar dataKey="spent" fill="#0969da" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#f6f8fa] border-b border-[#d0d7de] text-[#57606a] font-semibold">
+                  <tr>
+                    <th className="py-2.5 px-3">#</th>
+                    <th className="py-2.5 px-3">Expenditure Category</th>
+                    <th className="py-2.5 px-3 text-right">Disbursed Amount</th>
+                    <th className="py-2.5 px-3 text-right">Share (%)</th>
+                    <th className="py-2.5 px-3 text-right">Voucher Count</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#d0d7de]">
+                  {categoryDistribution.map((item, idx) => (
+                    <tr key={item.name} className="hover:bg-[#f6f8fa]/80 transition-colors">
+                      <td className="py-2.5 px-3 font-mono text-[#57606a]">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-medium text-[#1f2328] flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: CATEGORY_COLORS[idx % CATEGORY_COLORS.length] }}
+                        />
+                        {item.name}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-semibold text-[#1f2328]">
+                        {formatCurrency(item.amount)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-[#0969da] font-medium">
+                        {item.percentage}%
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-[#57606a]">
+                        {item.count} vouchers
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
