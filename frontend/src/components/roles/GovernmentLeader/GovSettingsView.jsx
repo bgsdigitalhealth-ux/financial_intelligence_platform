@@ -9,7 +9,6 @@ import {
   Copy,
   Check,
   RefreshCw,
-  Landmark,
   Settings,
   Eye,
   MapPin,
@@ -22,7 +21,6 @@ import { useAuth } from '@/context/AuthContext'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
-import { formatCurrency } from '@/lib/utils'
 import { AddCollegeModal } from '@/components/shared/AddCollegeModal'
 
 const KARNATAKA_DISTRICTS = [
@@ -70,7 +68,6 @@ const INSTITUTION_TYPES = [
 export function GovSettingsView({ onTriggerToast }) {
   const {
     universities = [],
-    bankAccounts = [],
     updateUniversity,
     deleteUniversity,
     refreshBackendData,
@@ -195,7 +192,7 @@ export function GovSettingsView({ onTriggerToast }) {
       if (onTriggerToast) {
         onTriggerToast(
           'College Profile Updated',
-          `${payload.name} complete details saved.`,
+          `${payload.name} details saved.`,
           'success'
         )
       }
@@ -238,23 +235,6 @@ export function GovSettingsView({ onTriggerToast }) {
     }
   }
 
-  // Helper to extract primary bank account
-  const getPrimaryAccount = (college) => {
-    const matched = bankAccounts.filter(
-      (a) =>
-        a.universityId === college.id ||
-        (college.code && a.universityId && a.universityId.toLowerCase().includes(college.code.toLowerCase()))
-    )
-    if (matched.length > 0) return matched[0]
-    return {
-      bankName: 'Canara Bank',
-      branch: 'Bengaluru Urban Campus Branch',
-      accountNumber: '405351387552',
-      ifscCode: 'CNRB0001001',
-      accountType: 'State Treasury Escrow',
-    }
-  }
-
   // Filtered colleges list
   const filteredColleges = useMemo(() => {
     return (universities || []).filter((college) => {
@@ -290,7 +270,7 @@ export function GovSettingsView({ onTriggerToast }) {
                 Government Institutional Profile Settings & Directory
               </h1>
               <p className="text-xs text-[#57606a] mt-0.5">
-                Centralized registry of Colleges, Universities, and complete registration profile details (Transaction-free view)
+                Centralized registry of Colleges, Universities, and complete registration profile details
               </p>
             </div>
           </div>
@@ -364,7 +344,7 @@ export function GovSettingsView({ onTriggerToast }) {
         </div>
       </div>
 
-      {/* 3. Complete College Profile Details Table (Zero Transactions) */}
+      {/* 3. Complete College Profile Details Table (Profile Only - No Bank Accounts or Amounts) */}
       <div className="bg-white rounded-xl border border-[#d0d7de] shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
@@ -375,8 +355,6 @@ export function GovSettingsView({ onTriggerToast }) {
                 <th className="py-3 px-2">Code</th>
                 <th className="py-3 px-4">Authorized Login Emails</th>
                 <th className="py-3 px-3">Campus Location & Address</th>
-                <th className="py-3 px-3">Primary Bank Account</th>
-                <th className="py-3 px-3 text-right">Sanctioned Allocation</th>
                 <th className="py-3 px-3 text-center">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
@@ -384,7 +362,7 @@ export function GovSettingsView({ onTriggerToast }) {
             <tbody className="divide-y divide-[#d0d7de]/60">
               {filteredColleges.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-[#57606a]">
+                  <td colSpan={7} className="py-12 text-center text-[#57606a]">
                     <Building2 className="h-8 w-8 mx-auto mb-2 text-[#8c959f] opacity-50" />
                     <p className="font-medium text-[#1f2328]">No institutions found matching your filter</p>
                     <p className="text-[11px] mt-0.5 text-[#57606a]">Try clearing search or register a new college above.</p>
@@ -392,7 +370,6 @@ export function GovSettingsView({ onTriggerToast }) {
                 </tr>
               ) : (
                 filteredColleges.map((college, idx) => {
-                  const primaryAcc = getPrimaryAccount(college)
                   const officialEmail =
                     college.officialEmail || college.email || `${college.code?.toLowerCase() || 'college'}admin@gmail.com`
                   const financeEmail =
@@ -407,8 +384,6 @@ export function GovSettingsView({ onTriggerToast }) {
                     college.affiliatedUniversity ||
                     college.affiliated_university ||
                     'Karnataka State Higher Education Council'
-
-                  const allocationVal = Number(college.allocation || college.allocatedAmount) || 50000000
 
                   return (
                     <tr key={college.id || idx} className="hover:bg-[#f6f8fa]/80 transition-colors">
@@ -489,27 +464,6 @@ export function GovSettingsView({ onTriggerToast }) {
                         </div>
                       </td>
 
-                      {/* Primary Bank Account */}
-                      <td className="py-3 px-3 min-w-[180px]">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 font-medium text-[#1f2328]">
-                            <Landmark className="h-3.5 w-3.5 text-[#0969da] shrink-0" />
-                            <span>{primaryAcc.bankName}</span>
-                          </div>
-                          <div className="text-[10px] text-[#57606a] font-mono">
-                            A/c: ••••{String(primaryAcc.accountNumber || '7552').slice(-4)} | IFSC: {primaryAcc.ifscCode || 'CNRB0001001'}
-                          </div>
-                          <div className="text-[10px] text-slate-500 truncate max-w-[160px]">
-                            {primaryAcc.branch || 'Campus Branch'}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Allocation */}
-                      <td className="py-3 px-3 text-right font-mono font-bold text-[#1f2328]">
-                        {formatCurrency(allocationVal)}
-                      </td>
-
                       {/* Status */}
                       <td className="py-3 px-3 text-center">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -556,7 +510,7 @@ export function GovSettingsView({ onTriggerToast }) {
         </div>
       </div>
 
-      {/* 4. Complete College/University Profile Modal (View Only - Zero Transactions) */}
+      {/* 4. Complete College/University Profile Modal (Profile Only) */}
       {isViewModalOpen && viewingCollege && (
         <Modal
           isOpen={isViewModalOpen}
@@ -565,7 +519,7 @@ export function GovSettingsView({ onTriggerToast }) {
             setViewingCollege(null)
           }}
           title={`Institutional Profile — ${viewingCollege.name}`}
-          maxWidth="max-w-3xl"
+          maxWidth="max-w-2xl"
         >
           <div className="space-y-4 pt-1 text-xs">
             {/* Top Identity Banner */}
@@ -636,7 +590,7 @@ export function GovSettingsView({ onTriggerToast }) {
                       <button
                         type="button"
                         onClick={() => handleCopy(viewingCollege.officialEmail || viewingCollege.email, 'modal-admin')}
-                        className="text-[11px] text-[#0969da] hover:underline flex items-center gap-1"
+                        className="text-[11px] text-[#0969da] hover:underline flex items-center gap-1 cursor-pointer"
                       >
                         {copiedKey === 'modal-admin' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                         Copy
@@ -653,7 +607,7 @@ export function GovSettingsView({ onTriggerToast }) {
                       <button
                         type="button"
                         onClick={() => handleCopy(viewingCollege.financeEmail || viewingCollege.officialEmail, 'modal-fin')}
-                        className="text-[11px] text-[#1a7f37] hover:underline flex items-center gap-1"
+                        className="text-[11px] text-[#1a7f37] hover:underline flex items-center gap-1 cursor-pointer"
                       >
                         {copiedKey === 'modal-fin' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                         Copy
@@ -670,7 +624,7 @@ export function GovSettingsView({ onTriggerToast }) {
               </div>
 
               {/* Card 3: Campus Geographic Location */}
-              <div className="p-4 bg-white rounded-xl border border-[#d0d7de] shadow-2xs space-y-2.5">
+              <div className="p-4 bg-white rounded-xl border border-[#d0d7de] shadow-2xs space-y-2.5 md:col-span-2">
                 <div className="text-[11px] font-bold text-[#57606a] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#d0d7de]/50 pb-1.5">
                   <MapPin className="h-4 w-4 text-[#0969da]" />
                   Campus Location & Address
@@ -694,56 +648,13 @@ export function GovSettingsView({ onTriggerToast }) {
                   </div>
                 </div>
               </div>
-
-              {/* Card 4: Primary Bank Account & Budget Allocation */}
-              <div className="p-4 bg-white rounded-xl border border-[#d0d7de] shadow-2xs space-y-2.5">
-                <div className="text-[11px] font-bold text-[#57606a] uppercase tracking-wider flex items-center gap-1.5 border-b border-[#d0d7de]/50 pb-1.5">
-                  <Landmark className="h-4 w-4 text-[#0969da]" />
-                  Primary Bank Account & Grant Allocation
-                </div>
-                {(() => {
-                  const acc = getPrimaryAccount(viewingCollege)
-                  return (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[11px] text-[#57606a] block">Bank Name</span>
-                          <span className="font-semibold text-[#1f2328] text-xs">{acc.bankName}</span>
-                        </div>
-                        <div>
-                          <span className="text-[11px] text-[#57606a] block">Branch</span>
-                          <span className="font-medium text-[#1f2328] text-xs truncate block">{acc.branch}</span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="text-[11px] text-[#57606a] block">Account Number</span>
-                          <span className="font-mono font-medium text-xs text-[#1f2328]">
-                            ••••{String(acc.accountNumber || '7552').slice(-4)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[11px] text-[#57606a] block">IFSC Code</span>
-                          <span className="font-mono font-medium text-xs text-[#1f2328]">{acc.ifscCode || 'CNRB0001001'}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-[#57606a] block">Approved Budget Allocation</span>
-                        <span className="font-mono font-bold text-sm text-[#1a7f37]">
-                          {formatCurrency(Number(viewingCollege.allocation || viewingCollege.allocatedAmount) || 50000000)}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })()}
-              </div>
             </div>
 
-            {/* Zero-Transaction Policy Note */}
+            {/* Profile Policy Note */}
             <div className="p-3 bg-[#f6f8fa] rounded-lg border border-[#d0d7de] text-[11px] text-[#57606a] flex items-center gap-2">
               <FileText className="h-4 w-4 text-[#0969da] shrink-0" />
               <span>
-                <strong>Profile Only:</strong> Detailed quarterly transaction ledgers are isolated from Institutional Profile Settings.
+                <strong>Institutional Profile Only:</strong> Displays college identity, location, and authorized login email credentials.
               </span>
             </div>
 
@@ -782,7 +693,7 @@ export function GovSettingsView({ onTriggerToast }) {
         onTriggerToast={onTriggerToast}
       />
 
-      {/* 6. Edit College Modal (All Profile Fields from Registration) */}
+      {/* 6. Edit College Modal (Profile Fields Only) */}
       {isEditModalOpen && editingCollege && (
         <Modal
           isOpen={isEditModalOpen}
@@ -943,37 +854,20 @@ export function GovSettingsView({ onTriggerToast }) {
               />
             </div>
 
-            {/* Budget Allocation & Standing */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-[#1f2328] mb-1">
-                  Sanctioned Budget Allocation (₹)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={editingCollege.allocatedAmount}
-                  onChange={(e) =>
-                    setEditingCollege({ ...editingCollege, allocatedAmount: e.target.value })
-                  }
-                  className="w-full text-xs font-mono px-3 py-2 border border-[#d0d7de] rounded-lg focus:outline-none focus:border-[#0969da]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#1f2328] mb-1">
-                  Solvency / Operating Standing
-                </label>
-                <select
-                  value={editingCollege.status}
-                  onChange={(e) => setEditingCollege({ ...editingCollege, status: e.target.value })}
-                  className="w-full text-xs px-2.5 py-2 border border-[#d0d7de] rounded-lg focus:outline-none focus:border-[#0969da]"
-                >
-                  <option value="Optimal">Optimal</option>
-                  <option value="Compliant">Compliant</option>
-                  <option value="Under Review">Under Review</option>
-                </select>
-              </div>
+            {/* Solvency / Standing */}
+            <div>
+              <label className="block text-xs font-semibold text-[#1f2328] mb-1">
+                Solvency / Operating Standing
+              </label>
+              <select
+                value={editingCollege.status}
+                onChange={(e) => setEditingCollege({ ...editingCollege, status: e.target.value })}
+                className="w-full text-xs px-2.5 py-2 border border-[#d0d7de] rounded-lg focus:outline-none focus:border-[#0969da]"
+              >
+                <option value="Optimal">Optimal</option>
+                <option value="Compliant">Compliant</option>
+                <option value="Under Review">Under Review</option>
+              </select>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#d0d7de]">
@@ -1011,7 +905,7 @@ export function GovSettingsView({ onTriggerToast }) {
               <strong className="text-red-600">{deletingCollege.name}</strong> ({deletingCollege.code}) from the institutional registry?
             </p>
             <div className="p-3 bg-[#ffebe9] border border-[#ff8182]/40 rounded-lg text-[#cf222e] text-[11px]">
-              This will remove the college profile, registered login emails, and primary banking configuration.
+              This will remove the college profile and registered login emails.
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#d0d7de]">
               <Button
